@@ -51,6 +51,10 @@ public class Ticket {
         this.event = event;
     }
 
+    public void changeStatus(TicketStatus status) {
+        this.status = status;
+    }
+
     public Long getId() {
         return id;
     }
