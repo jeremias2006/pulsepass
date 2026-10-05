@@ -18,7 +18,9 @@ CREATE TABLE events (
                         category VARCHAR(30) NOT NULL,
                         status VARCHAR(30) NOT NULL,
                         minimum_age INTEGER,
-                        venue_id BIGINT NOT NULL REFERENCES venues(id)
+                        venue_id BIGINT NOT NULL REFERENCES venues(id),
+                        CONSTRAINT chk_event_category CHECK (category IN ('MUSIC','SPORTS','TECHNOLOGY','EDUCATION','CULTURE','ENTERTAINMENT')),
+                        CONSTRAINT chk_event_status CHECK (status IN ('DRAFT','PUBLISHED','SOLD_OUT','CANCELLED','FINISHED'))
 );
 
 CREATE TABLE artists (
@@ -61,7 +63,9 @@ CREATE TABLE tickets (
                          purchase_date TIMESTAMP NOT NULL,
                          user_id BIGINT NOT NULL REFERENCES users(id),
                          event_id BIGINT NOT NULL REFERENCES events(id),
-                         CONSTRAINT chk_ticket_price CHECK (price >= 0)
+                         CONSTRAINT chk_ticket_price CHECK (price >= 0),
+                         CONSTRAINT chk_ticket_type CHECK (type IN ('GENERAL','VIP','BACKSTAGE','STUDENT')),
+                         CONSTRAINT chk_ticket_status CHECK (status IN ('RESERVED','PAID','CANCELLED','USED'))
 );
 
 CREATE INDEX idx_event_venue ON events(venue_id);
