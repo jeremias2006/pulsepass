@@ -9,4 +9,11 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     // Buscar usuario por email ignorando mayúsculas/minúsculas (sección 14)
     Optional<User> findByEmailIgnoreCase(String email);
+
+    Optional<User> findByUsername(String username);
+
+    boolean existsByEmailIgnoreCase(String email);
+
+    boolean existsByUsername(String username);
+
 }
