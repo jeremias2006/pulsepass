@@ -40,6 +40,10 @@ public class User {
         profile.setUser(this);
     }
 
+    public void deactivate() {
+        this.active = false;
+    }
+
     public Long getId() {
         return id;
     }

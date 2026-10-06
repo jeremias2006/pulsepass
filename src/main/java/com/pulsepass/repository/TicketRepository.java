@@ -9,7 +9,17 @@ import org.springframework.data.repository.query.Param;
 import java.time.LocalDate;
 import java.util.List;
 
+import java.util.Optional;
+
+
 public interface TicketRepository extends JpaRepository<Ticket, Long> {
+
+    Optional<Ticket> findByTicketCode(String ticketCode);
+
+    List<Ticket> findByUserEmailIgnoreCaseOrderByPurchaseDateDesc(String email);
+
+    long countByEventEventCodeAndStatus(String eventCode, TicketStatus status);
+
 
     // FR-TKT-006: tickets de un usuario por email, con status opcional.
     // Dos firmas: la capa de servicio decide cuál llamar según si hay filtro de estado.

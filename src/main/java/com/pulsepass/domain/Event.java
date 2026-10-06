@@ -74,6 +74,11 @@ public class Event {
         this.venue = venue;
     }
 
+    public void changeStatus(EventStatus status) {
+        this.status = status;
+    }
+
+
     public void addArtist(Artist artist) {
         artists.add(artist);
         artist.getEvents().add(this);
