@@ -162,7 +162,11 @@ Las pruebas de integración (`PersistenceIntegrationTest`) usan **Testcontainers
 
 **Requisito:** Docker Desktop debe estar corriendo. La primera ejecución descarga la imagen `postgres:16-alpine` (~110 MB); las siguientes son instantáneas porque la imagen queda cacheada localmente.
 
-Resultado esperado: `BUILD SUCCESS` con los 35 tests en verde (QT-010): 34 en `PersistenceIntegrationTest` más `contextLoads` en `PulsepassApplicationTests`.
+Resultado esperado: `BUILD SUCCESS` (QT-010) con todos los tests en verde:
+
+- **Persistencia (Fase 1):** 35 tests — 34 en `PersistenceIntegrationTest` más `contextLoads` en `PulsepassApplicationTests`.
+- **Service (Fase 2):** los tests de las implementaciones de `service/impl`.
+- **Controller (Fase 3):** 58 tests `@WebMvcTest` + MockMvc (no necesitan Docker; ver sección 9).
 
 ### Cobertura de pruebas
 
@@ -229,7 +233,76 @@ Los 8 criterios de aceptación funcionales (AC-001 a AC-008) de la sección 11 d
 - Java 21
 - Spring Boot 4.1.1
 - Spring Data JPA / Hibernate 7.4.5
+- Spring MVC · Bean Validation · MockMvc
 - PostgreSQL (driver 42.7.13)
 - Flyway 12.4.0
 - Testcontainers 2.0.5
 - JUnit 5 / Spring Boot Test
+
+---
+
+## 9. API REST — Capa de Controladores (Fase 3)
+
+Expone mediante HTTP los 20 métodos de Service. El Controller no contiene reglas de negocio,
+no usa Repository y devuelve solo DTOs; todos los errores salen por `GlobalExceptionHandler`
+con el contrato `ErrorResponse`.
+
+### 9.1 Cómo ejecutar
+```bash
+./mvnw spring-boot:run          # requiere PostgreSQL local (ver application.properties)
+```
+
+### 9.2 Cómo correr las pruebas de Controller
+```bash
+./mvnw test -Dtest='*ControllerTest'   # @WebMvcTest + MockMvc, sin Docker ni BD
+./mvnw clean test                      # build completo (requiere Docker por Testcontainers)
+```
+
+### 9.3 Endpoints principales
+
+| Método | Endpoint | Descripción | Éxito |
+|---|---|---|---|
+| GET | `/api/venues/{code}` | Consultar venue | 200 |
+| GET | `/api/venues/active` | Venues activos | 200 |
+| POST | `/api/events` | Crear evento | 201 |
+| GET | `/api/events/{eventCode}` | Consultar evento | 200 |
+| GET | `/api/events/published` | Eventos publicados | 200 |
+| PATCH | `/api/events/{eventCode}/publish` | Publicar evento | 200 |
+| POST | `/api/events/{eventCode}/artists/{artistId}` | Asociar artista | 200 |
+| GET | `/api/events/by-artist?stageName=` | Eventos por artista | 200 |
+| GET | `/api/artists/{id}` | Artista por ID | 200 |
+| GET | `/api/artists/by-stage-name?stageName=` | Artista por nombre artístico | 200 |
+| GET | `/api/artists/active` | Artistas activos | 200 |
+| POST | `/api/users` | Registrar usuario | 201 |
+| GET | `/api/users/by-email?email=` | Usuario por email | 200 |
+| GET | `/api/users/by-username?username=` | Usuario por username | 200 |
+| POST | `/api/tickets` | Comprar ticket | 201 |
+| GET | `/api/tickets/{ticketCode}` | Consultar ticket | 200 |
+| GET | `/api/tickets/by-user?email=` | Tickets de un usuario | 200 |
+| GET | `/api/events/{eventCode}/tickets/paid` | Tickets pagados de un evento | 200 |
+| PATCH | `/api/tickets/{ticketCode}/cancel` | Cancelar ticket | 200 |
+| PATCH | `/api/tickets/{ticketCode}/use` | Marcar ticket como usado | 200 |
+
+### 9.4 Contrato de errores
+```json
+{
+  "timestamp": "2026-10-04T20:00:00",
+  "status": 404,
+  "error": "Not Found",
+  "message": "Event not found: CMF-2026",
+  "details": {}
+}
+```
+
+| Código | Cuándo | Excepción |
+|---|---|---|
+| 400 | Bean Validation, JSON mal formado, parámetro faltante o de tipo inválido | `MethodArgumentNotValidException`, `HttpMessageNotReadableException`, `MissingServletRequestParameterException`, `MethodArgumentTypeMismatchException` |
+| 404 | Recurso inexistente | `ResourceNotFoundException` |
+| 409 | Duplicado o regla de negocio | `DuplicateResourceException`, `BusinessRuleException` |
+| 500 | Error inesperado (mensaje genérico, detalle solo en el log) | `Exception` |
+
+### 9.5 Cobertura de pruebas (58 tests)
+`VenueControllerTest` (4) · `EventControllerTest` (20) · `ArtistControllerTest` (6) ·
+`UserControllerTest` (13) · `TicketControllerTest` (15). Cubren AC-CTRL001 a AC-CTRL014
+(ver comentarios `// TEST-CTRL-… / AC-CTRL…` en cada test). AC-CTRL015 y AC-CTRL016 se
+verifican por diseño: ningún Controller importa un Repository ni una entidad de `domain`.
