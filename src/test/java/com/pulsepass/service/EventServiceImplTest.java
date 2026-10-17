@@ -7,6 +7,7 @@ import com.pulsepass.domain.EventStatus;
 import com.pulsepass.domain.Venue;
 import com.pulsepass.dto.request.CreateEventRequest;
 import com.pulsepass.dto.response.EventResponse;
+import com.pulsepass.dto.response.EventSummaryResponse;
 import com.pulsepass.exception.BusinessRuleException;
 import com.pulsepass.exception.DuplicateResourceException;
 import com.pulsepass.exception.ResourceNotFoundException;
@@ -21,7 +22,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import com.pulsepass.service.AuthorizationService;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -48,7 +48,7 @@ class EventServiceImplTest {
     @Mock
     private EventMapper eventMapper;
     @Mock
-    private AuthorizationService authorizationService;   // el único nuevo
+    private AuthorizationService authorizationService;
     @Mock
     private Venue venue;
     @Mock
@@ -237,6 +237,86 @@ class EventServiceImplTest {
         verify(eventRepository, never()).save(any(Event.class));
     }
 
+    // ---------- Borradores: FR-SECEVT-02 ----------
+    @Test
+    void findByCode_draftAsPublic_throwsNotFoundAndNeverMaps() {
+        // ARRANGE
+        Event draft = newEvent(EventStatus.DRAFT, FUTURE);
+        when(eventRepository.findByEventCode("CMF-2026")).thenReturn(Optional.of(draft));
+        when(authorizationService.isStaffOrAdmin()).thenReturn(false);
+
+        // ACT + ASSERT
+        assertThatThrownBy(() -> eventService.findByCode("CMF-2026"))
+                .isInstanceOf(ResourceNotFoundException.class);
+        verify(eventMapper, never()).toResponse(any(Event.class));
+    }
+
+    @Test
+    void findByCode_draftAsStaffOrAdmin_returnsDto() {
+        // ARRANGE
+        Event draft = newEvent(EventStatus.DRAFT, FUTURE);
+        when(eventRepository.findByEventCode("CMF-2026")).thenReturn(Optional.of(draft));
+        when(authorizationService.isStaffOrAdmin()).thenReturn(true);
+        when(eventMapper.toResponse(draft)).thenReturn(responseOf(draft));
+
+        // ACT
+        EventResponse result = eventService.findByCode("CMF-2026");
+
+        // ASSERT
+        assertThat(result.status()).isEqualTo(EventStatus.DRAFT);
+    }
+
+    @Test
+    void findByCode_published_isVisibleWithoutPrivilegeCheck() {
+        // ARRANGE
+        Event published = newEvent(EventStatus.PUBLISHED, FUTURE);
+        when(eventRepository.findByEventCode("CMF-2026")).thenReturn(Optional.of(published));
+        when(eventMapper.toResponse(published)).thenReturn(responseOf(published));
+
+        // ACT
+        EventResponse result = eventService.findByCode("CMF-2026");
+
+        // ASSERT
+        assertThat(result.status()).isEqualTo(EventStatus.PUBLISHED);
+        verify(authorizationService, never()).isStaffOrAdmin();
+    }
+
+    // ---------- Borradores: FR-SECEVT-06 ----------
+    @Test
+    void findByArtist_asPublic_returnsOnlyPublishedEvents() {
+        // ARRANGE
+        Event published = newEvent(EventStatus.PUBLISHED, FUTURE);
+        Event draft = newEvent(EventStatus.DRAFT, FUTURE);
+        when(authorizationService.isStaffOrAdmin()).thenReturn(false);
+        when(eventRepository.findByArtistStageName("Solar Beat")).thenReturn(List.of(published, draft));
+        when(eventMapper.toSummary(published)).thenReturn(summaryOf(published));
+
+        // ACT
+        List<EventSummaryResponse> result = eventService.findByArtist("Solar Beat");
+
+        // ASSERT
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).status()).isEqualTo(EventStatus.PUBLISHED);
+        verify(eventMapper, never()).toSummary(draft);
+    }
+
+    @Test
+    void findByArtist_asStaffOrAdmin_returnsAllEvents() {
+        // ARRANGE
+        Event published = newEvent(EventStatus.PUBLISHED, FUTURE);
+        Event draft = newEvent(EventStatus.DRAFT, FUTURE);
+        when(authorizationService.isStaffOrAdmin()).thenReturn(true);
+        when(eventRepository.findByArtistStageName("Solar Beat")).thenReturn(List.of(published, draft));
+        when(eventMapper.toSummary(published)).thenReturn(summaryOf(published));
+        when(eventMapper.toSummary(draft)).thenReturn(summaryOf(draft));
+
+        // ACT
+        List<EventSummaryResponse> result = eventService.findByArtist("Solar Beat");
+
+        // ASSERT
+        assertThat(result).hasSize(2);
+    }
+
     // ---------- helpers ----------
     private Event newEvent(EventStatus status, LocalDate date) {
         Event event = new Event("CMF-2026", "Caribbean Music Fest 2026", "desc",
@@ -254,5 +334,10 @@ class EventServiceImplTest {
         return new EventResponse(1L, e.getEventCode(), e.getName(), e.getDescription(),
                 e.getCategory(), e.getStatus(), e.getEventDate(), e.getMinimumAge(),
                 "VEN-SMR-01", "Marina Convention Center", List.of());
+    }
+
+    private EventSummaryResponse summaryOf(Event e) {
+        return new EventSummaryResponse(1L, e.getEventCode(), e.getName(), e.getCategory(),
+                e.getStatus(), e.getEventDate(), "Marina Convention Center");
     }
 }
