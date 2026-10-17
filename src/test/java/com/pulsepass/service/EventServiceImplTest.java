@@ -21,6 +21,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import com.pulsepass.service.AuthorizationService;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -46,6 +47,8 @@ class EventServiceImplTest {
     private ArtistRepository artistRepository;
     @Mock
     private EventMapper eventMapper;
+    @Mock
+    private AuthorizationService authorizationService;   // el único nuevo
     @Mock
     private Venue venue;
     @Mock
