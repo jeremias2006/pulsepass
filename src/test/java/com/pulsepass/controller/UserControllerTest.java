@@ -47,7 +47,8 @@ class UserControllerTest {
               "lastName": "Perez",
               "phone": "3001234567",
               "city": "Santa Marta",
-              "birthDate": "1998-05-10"
+              "birthDate": "1998-05-10",
+              "password": "UnaFraseSeguraLarga2026!"
             }
             """;
 
@@ -96,7 +97,8 @@ class UserControllerTest {
                                   "email": "andrea@mail.com",
                                   "firstName": "Andrea",
                                   "lastName": "Perez",
-                                  "birthDate": "1998-05-10"
+                                  "birthDate": "1998-05-10",
+                                  "password": "UnaFraseSeguraLarga2026!"
                                 }
                                 """))
                 .andExpect(status().isCreated());
@@ -130,8 +132,8 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.details.email").exists())
                 .andExpect(jsonPath("$.details.firstName").value("First name is required"))
                 .andExpect(jsonPath("$.details.lastName").value("Last name is required"))
-                .andExpect(jsonPath("$.details.birthDate").value("Birth date is required"));
-
+                .andExpect(jsonPath("$.details.birthDate").value("Birth date is required"))
+                .andExpect(jsonPath("$.details.password").value("Password is required"));
         verify(userService, never()).register(any());
     }
 
