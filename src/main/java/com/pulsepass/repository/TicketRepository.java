@@ -42,6 +42,8 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
             """)
     long countPaidTicketsByEventCode(@Param("eventCode") String eventCode);
 
+    boolean existsByTicketCodeAndUserId(String ticketCode, Long userId);
+
     // FR-SRC-004 (Could, opcional): tickets cuyo evento sea posterior a una fecha,
     // ordenados cronológicamente por la fecha del evento.
     List<Ticket> findByEventEventDateAfterOrderByEventEventDateAsc(LocalDate date);
