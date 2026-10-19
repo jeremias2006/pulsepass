@@ -8,12 +8,13 @@ Alcance: 22 rutas (20 de negocio + `POST /api/auth/login` + `GET /api/auth/me`),
 
 | Archivo | Para qué sirve |
 |---|---|
-| `postman/PulsePass-Manual-E2E.postman_collection.json` | Colección Postman v2.1, 98 solicitudes organizadas por carpetas, sin scripts. |
+| `postman/PulsePass-Manual-E2E.postman_collection.json` | Colección Postman v2.1, 103 solicitudes organizadas por carpetas, sin scripts. |
 | `postman/PulsePass-local.postman_environment.json` | Plantilla de variables. Los secretos van vacíos y solo se llenan dentro de Postman. |
 | `fixtures/seed-e2e.sql` | Venues y eventos de prueba (solo para la base E2E). |
 | `fixtures/README.md` | Qué datos crea cada fixture y cómo preparar los usuarios. |
 | `checklist-e2e-manual.md` | Orden recomendado de ejecución. |
 | `registro-ejecucion-manual.md` | Bitácora: esperado vs. observado, PASS / FAIL / BLOCKED / NOT RUN. |
+| `matriz-trazabilidad-e2e.md` | Requisitos FR-E2E y rutas contra los casos y resultados. |
 
 ## 2. Preparar el ambiente
 
@@ -108,6 +109,7 @@ Sigue `checklist-e2e-manual.md` (equivale a los Flujos A–E del PRD). Reglas qu
 - Las **denegaciones** (403) sobre un recurso se ejecutan **antes** de cualquier transición de estado de ese recurso.
 - `PATCH .../publish` sobre `eventToPublishCode` (solicitud `E2EEVT04-fix`) se envía **al final** del Flujo C, después de las negativas `TC-SEC002a/b`, `TC-AUTH014` y de comprobar que sigue en `DRAFT`.
 - Usa un ticket distinto para cada operación irreversible: T1 para cancelar, T2 para usar. No reutilices T1 para `use` salvo en el caso de "usar ticket cancelado" (409).
+- `TC-SEC005` y `TC-SEC017` se ejecutan al final. El primero necesita asociar antes un artista al borrador (`TC-SEC005-pre`) y el segundo el cambio de rol por SQL; ambos pasos están en `fixtures/README.md`.
 - Si falla un prerrequisito, marca los casos dependientes como BLOCKED, no como PASS.
 
 ## 8. Repetir las pruebas

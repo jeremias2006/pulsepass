@@ -55,14 +55,47 @@ El registro público solo crea usuarios con rol USER; un campo `role` en el cuer
 
 ## Usuario inactivo (`TC-AUTH013`)
 
-1. Haz login con un usuario ya registrado y copia su `accessToken` a `inactiveUserToken` (por ejemplo, USER_C, una vez terminado el caso de edad).
+1. Haz login con un usuario ya registrado y copia su `accessToken` a `inactiveUserToken` (por ejemplo, el usuario creado en `TC-SEC016`).
 2. Desactívalo en la base E2E, verificando primero que estás en `pulsepass_e2e`:
 
 ```
-UPDATE users SET active = false WHERE username = 'userc_r01';
+UPDATE users SET active = false WHERE username = 'usere_r01';
 ```
 
 3. Envía `TC-AUTH013` (`GET /api/auth/me` con `inactiveUserToken`). Esperado: 401 y ningún dato del usuario.
+
+## Artista en el borrador (`TC-SEC005`)
+
+El seed no asocia artistas a `EVT-E2E-DRAFT`. Para comprobar que `by-artist` no expone borradores, asócialo por API con el token de ADMIN (`TC-SEC005-pre`):
+
+```
+POST {{baseUrl}}/api/events/{{draftEventCode}}/artists/{{artistId}}
+```
+
+Esperado: 200 y el evento sigue en DRAFT. Envíalo una sola vez; si lo repites responde 409. Tras restaurar la base hay que volver a enviarlo.
+
+## Rol temporal (`TC-SEC017`)
+
+Comprueba que un JWT emitido antes de revocar un rol pierde ese privilegio en la siguiente petición. Usa USER_C cuando ya haya terminado el caso de edad insuficiente. Confirma antes que estás conectado a `pulsepass_e2e`.
+
+1. Asigna el rol STAFF:
+
+```
+INSERT INTO user_roles (user_id, role)
+SELECT id, 'STAFF' FROM users WHERE username = 'userc_r01';
+```
+
+2. Haz login con USER_C y copia el `accessToken` a `userCToken`.
+3. Envía `TC-SEC017a` (`GET /api/events/{{draftEventCode}}` con `userCToken`). Esperado: 200.
+4. Revoca el rol sin volver a iniciar sesión:
+
+```
+DELETE FROM user_roles
+WHERE role = 'STAFF'
+  AND user_id = (SELECT id FROM users WHERE username = 'userc_r01');
+```
+
+5. Reenvía la misma petición con el mismo token (`TC-SEC017b`). Esperado: 404, porque ya solo tiene rol USER.
 
 ## Reglas
 

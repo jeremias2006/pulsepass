@@ -27,7 +27,7 @@
 | E2EART01 | 2026-10-19 04:16 | Anónimo | GET /api/artists/{{artistId}} | 200 | 200 | id 1, stageName "Solar Beat", active true | PASS | |
 | E2EART01-neg | 2026-10-19 04:17 | Anónimo | GET /api/artists/999999 | 404 | 404 | ErrorResponse con 5 campos, status 404, message "Artist not found: 999999" | PASS | |
 | E2EART02 | 2026-10-19 04:17 | Anónimo | GET /api/artists/by-stage-name | 200 | 200 | Mismo artista id 1 ("Solar Beat"); la búsqueda ignora mayúsculas | PASS | Enviado con stageName=Solar%20Beat |
-| E2EEVT03 / TC-SEC005 | 2026-10-19 04:17 | Anónimo | GET /api/events/published | 200 | 200 | 3 eventos PUBLISHED por fecha: EVT-E2E-PUB (2027-06-20), EVT-E2E-CAP1 (2027-07-10), EVT-E2E-ADULT (2027-07-15); no aparecen EVT-E2E-DRAFT ni EVT-E2E-TOPUB | PASS | |
+| E2EEVT03 | 2026-10-19 04:17 | Anónimo | GET /api/events/published | 200 | 200 | 3 eventos PUBLISHED por fecha: EVT-E2E-PUB (2027-06-20), EVT-E2E-CAP1 (2027-07-10), EVT-E2E-ADULT (2027-07-15); no aparecen EVT-E2E-DRAFT ni EVT-E2E-TOPUB | PASS | |
 | E2EEVT02 | 2026-10-19 04:17 | Anónimo | GET /api/events/{{publishedEventCode}} | 200 | 200 | EVT-E2E-PUB, status PUBLISHED, minimumAge 0, venueCode VEN-E2E-01, artists [] | PASS | |
 | TC-SEC004 | 2026-10-19 04:18 | Anónimo | GET /api/events/{{draftEventCode}} | 404 | 404 | ErrorResponse con 5 campos, status 404, message "Event not found: EVT-E2E-DRAFT" | PASS | Mismo formato que un código inexistente: no revela que el borrador existe |
 | E2EEVT06 | 2026-10-19 04:24 | Anónimo | GET /api/events/by-artist | 200 | 200 | [EVT-r01] solo PUBLISHED (summary: id, eventCode, name, category, status, eventDate, venueName) | PASS | Ejecutado después de publicar EVT-r01 (Flujo C). El fixture no asocia artistas a borradores, así que la exclusión de DRAFT no se pudo observar con datos; la cubre el filtro de EventServiceImpl.findByArtist |
@@ -80,10 +80,10 @@
 | TC-SEC003 | 2026-10-19 04:20 | USER_A | POST /api/events/{{publishedEventCode}}/artists/{{artistId}} | 403 | 403 | ErrorResponse con 5 campos, status 403 | PASS | Evento EVT-E2E-PUB con artistId=1 |
 | Integridad tras 403 | 2026-10-19 04:20 | ADMIN | GET /api/events/{{eventToPublishCode}} y {{newEventCode}} | 200 DRAFT / 404 | 200 / 404 | EVT-E2E-TOPUB: 200, status DRAFT, sin cambios. EVT-r01: 404 "Event not found: EVT-r01" | PASS | Ningún 403 anterior modificó ni creó datos |
 | E2EEVT01 / TC-BIZ003 | 2026-10-19 04:20 | ADMIN | POST /api/events | 201 | 201 | EVT-r01, name "PulsePass E2E r01", category MUSIC, status DRAFT, eventDate 2027-08-20, minimumAge 0, venueCode VEN-E2E-01, artists [] | PASS | El request no controla el estado: siempre nace en DRAFT |
-| Código duplicado | 2026-10-19 04:21 | ADMIN | POST /api/events | 409 | 409 | ErrorResponse con 5 campos, status 409, error "Conflict", message "Event code already exists: EVT-r01" | PASS | |
-| Categoría inválida | 2026-10-19 04:21 | ADMIN | POST /api/events | 400 | 400 | status 400, message "Malformed or invalid JSON request", details.body "Check JSON syntax, dates and enum values" | PASS | category "FOO" no es un valor del enum; sin nombres de clase ni stack trace |
-| Venue inexistente | 2026-10-19 04:21 | ADMIN | POST /api/events | 404 | 404 | ErrorResponse con 5 campos, status 404, message "Venue not found: NO-EXISTE" | PASS | |
-| Falta name | 2026-10-19 04:21 | ADMIN | POST /api/events | 400 | 400 | status 400, message "Validation failed", details.name "Name is required" | PASS | |
+| TC-BIZ015-dup | 2026-10-19 04:21 | ADMIN | POST /api/events | 409 | 409 | ErrorResponse con 5 campos, status 409, error "Conflict", message "Event code already exists: EVT-r01" | PASS | |
+| TC-BIZ015-cat | 2026-10-19 04:21 | ADMIN | POST /api/events | 400 | 400 | status 400, message "Malformed or invalid JSON request", details.body "Check JSON syntax, dates and enum values" | PASS | category "FOO" no es un valor del enum; sin nombres de clase ni stack trace |
+| TC-BIZ015-venue | 2026-10-19 04:21 | ADMIN | POST /api/events | 404 | 404 | ErrorResponse con 5 campos, status 404, message "Venue not found: NO-EXISTE" | PASS | |
+| TC-BIZ015-name | 2026-10-19 04:21 | ADMIN | POST /api/events | 400 | 400 | status 400, message "Validation failed", details.name "Name is required" | PASS | |
 | TC-SEC004 (borrador anónimo) | 2026-10-19 04:22 | Anónimo | GET /api/events/{{newEventCode}} | 404 | 404 | ErrorResponse con 5 campos, status 404, message "Event not found: EVT-r01" | PASS | |
 | TC-SEC015 | 2026-10-19 04:22 | ADMIN | GET /api/events/{{newEventCode}} | 200 | 200 | EVT-r01, status DRAFT | PASS | |
 | Borrador con STAFF | 2026-10-19 04:22 | STAFF | GET /api/events/{{newEventCode}} | 200 | 200 | EVT-r01, status DRAFT | PASS | STAFF también ve borradores |
@@ -99,8 +99,8 @@
 | Caso | Fecha/hora | Actor | Método y ruta | HTTP esperado | HTTP real | JSON / estado observado | Resultado | Observación |
 |---|---|---|---|---|---|---|---|---|
 | E2ETKT01 / TC-BIZ007 | 2026-10-19 04:24 | USER_A | POST /api/tickets (GENERAL) | 201 | 201 | ticketCode TKT-<8 hex>, type GENERAL, price 50.00, status PAID, userEmail de A, eventCode EVT-E2E-PUB | PASS | Copiado a ticketCancelableCode (T1) |
-| E2ETKT02 | 2026-10-19 04:25 | USER_A | GET /api/tickets/{{ticketCancelableCode}} | 200 | 200 | T1: PAID, mismo ticketCode, dueño A | PASS | |
-| E2ETKT03 | 2026-10-19 04:25 | USER_A | GET /api/tickets/by-user?email=A | 200 | 200 | Lista con 1 ticket (T1) | PASS | |
+| E2ETKT02 / TC-BIZ008 | 2026-10-19 04:25 | USER_A | GET /api/tickets/{{ticketCancelableCode}} | 200 | 200 | T1: PAID, mismo ticketCode, dueño A | PASS | |
+| E2ETKT03 / TC-BIZ008 | 2026-10-19 04:25 | USER_A | GET /api/tickets/by-user?email=A | 200 | 200 | Lista con 1 ticket (T1) | PASS | |
 | E2EUSR02 | 2026-10-19 04:25 | USER_A | GET /api/users/by-email?email=A | 200 | 200 | id 3, usera_r01, usera.r01@example.test, active true, firstName Andrea, birthDate 1998-05-15; sin password ni hash | PASS | |
 | E2EUSR03 | 2026-10-19 04:26 | USER_A | GET /api/users/by-username?username=A | 200 | 200 | Mismo usuario A | PASS | |
 | TC-SEC006 | 2026-10-19 04:26 | USER_B | GET /api/users/by-email?email=A | 403 | 403 | ErrorResponse con 5 campos, status 403; el cuerpo no incluye datos de A | PASS | |
@@ -121,8 +121,8 @@
 | Compra T2 (VIP) | 2026-10-19 04:30 | USER_A | POST /api/tickets | 201 | 201 | ticketCode TKT-<8 hex>, type VIP, price 100.00, status PAID | PASS | Copiado a ticketUsableCode (T2) |
 | E2ETKT04 / TC-BIZ009 | 2026-10-19 04:30 | STAFF | GET /api/events/{{publishedEventCode}}/tickets/paid | 200 | 200 | 1 ticket: T2 (PAID, VIP). T1 no aparece (CANCELLED) | PASS | |
 | TC-SEC013 | 2026-10-19 04:31 | USER_A | GET .../tickets/paid | 403 | 403 | ErrorResponse con 5 campos, status 403 | PASS | |
-| USER usa ticket | 2026-10-19 04:31 | USER_A | PATCH .../use (T2) | 403 | 403 | ErrorResponse con 5 campos, status 403; T2 sigue PAID (GET del dueño) | PASS | |
-| E2ETKT06 / TC-BIZ012 | 2026-10-19 04:31 | STAFF | PATCH .../use (T2) | 200 | 200 | T2: status USED | PASS | |
+| TC-SEC014-pre (USER usa ticket) | 2026-10-19 04:31 | USER_A | PATCH .../use (T2) | 403 | 403 | ErrorResponse con 5 campos, status 403; T2 sigue PAID (GET del dueño) | PASS | |
+| E2ETKT06 / TC-BIZ012 / TC-SEC014 | 2026-10-19 04:31 | STAFF | PATCH .../use (T2) | 200 | 200 | T2: status USED | PASS | |
 | Reconsulta T2 | 2026-10-19 04:31 | USER_A | GET /api/tickets/{{ticketUsableCode}} | 200 | 200 | T2: USED | PASS | |
 | TC-BIZ013 | 2026-10-19 04:32 | STAFF | PATCH .../use (T2 otra vez) | 409 | 409 | ErrorResponse con 5 campos, status 409, message "Only PAID tickets can be used. Current status: USED" | PASS | |
 | Usar ticket cancelado | 2026-10-19 04:32 | STAFF | PATCH .../use (T1) | 409 | 409 | ErrorResponse con 5 campos, status 409, message "Cancelled ticket cannot be used: <código de T1>" | PASS | |
@@ -149,6 +149,18 @@
 | Ningún 500 | 2026-10-19 04:35 | — | Revisar en toda la ejecución | — | — | Ningún 500 en los 103 casos | PASS |  |
 
 ---
+
+## 6.1 Casos pendientes
+
+Se ejecutan al final. `TC-SEC005` necesita antes asociar un artista al borrador con `TC-SEC005-pre`, y `TC-SEC017` requiere el cambio de rol por SQL descrito en `fixtures/README.md`.
+
+| Caso | Fecha/hora | Actor | Método y ruta | HTTP esperado | HTTP real | JSON / estado observado | Resultado | Observación |
+|---|---|---|---|---|---|---|---|---|
+| TC-SEC005-pre | | ADMIN | POST /api/events/{{draftEventCode}}/artists/{{artistId}} | 200 | | EVT-E2E-DRAFT con el artista asociado; sigue en DRAFT | NOT RUN | Enviar una sola vez: repetirlo da 409 |
+| TC-SEC005a | | Anónimo | GET /api/events/by-artist?stageName={{artistStageName}} | 200 | | Solo eventos PUBLISHED; no debe aparecer EVT-E2E-DRAFT | NOT RUN | |
+| TC-SEC005b | | ADMIN | GET /api/events/by-artist?stageName={{artistStageName}} | 200 | | Debe incluir también EVT-E2E-DRAFT | NOT RUN | Contraste con TC-SEC005a |
+| TC-SEC017a | | USER_C con rol STAFF temporal | GET /api/events/{{draftEventCode}} | 200 | | EVT-E2E-DRAFT, status DRAFT | NOT RUN | Token emitido después de asignar STAFF |
+| TC-SEC017b | | USER_C, mismo token, rol STAFF revocado | GET /api/events/{{draftEventCode}} | 404 | | ErrorResponse 404 sin datos del borrador | NOT RUN | El filtro JWT recarga los roles en cada request |
 
 ## 7. Cobertura de las 22 rutas
 
@@ -192,11 +204,12 @@ Rutas cubiertas: 22 de 22.
 | Tickets (Flujo D) | 28 | 0 | 0 | 0 |
 | Reglas de negocio (409) | 7 | 0 | 0 | 0 |
 | Errores HTTP | 4 | 0 | 0 | 0 |
-| **Total** | **103** | **0** | **0** | **0** |
+| Pendientes (SEC005 / SEC017) | 0 | 0 | 0 | 5 |
+| **Total** | **103** | **0** | **0** | **5** |
 
 ## 9. Defectos y bloqueos
 
-Ninguno: no hay casos en FAIL ni BLOCKED.
+Ninguno: no hay casos en FAIL ni BLOCKED. Quedan 5 casos sin ejecutar (sección 6.1).
 
 | # | Caso | Precondición | Pasos | HTTP esperado vs. observado | Cómo reproducir |
 |---|---|---|---|---|---|

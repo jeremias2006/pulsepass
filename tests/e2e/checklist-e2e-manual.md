@@ -31,7 +31,7 @@ Orden recomendado para enviar las solicitudes de Postman. Marca cada casilla al 
 | [ ] | E2EART01 | Anónimo | `GET /api/artists/{{artistId}}` | 200 |
 | [ ] | E2EART01-neg | Anónimo | `GET /api/artists/999999` | 404 |
 | [ ] | E2EART02 | Anónimo | `GET /api/artists/by-stage-name` | 200 |
-| [ ] | E2EEVT03 / TC-SEC005 | Anónimo | `GET /api/events/published` | 200 |
+| [ ] | E2EEVT03 | Anónimo | `GET /api/events/published` | 200 |
 | [ ] | E2EEVT02 | Anónimo | `GET /api/events/{{publishedEventCode}}` | 200 |
 | [ ] | TC-SEC004 | Anónimo | `GET /api/events/{{draftEventCode}}` | 404 |
 | [ ] | E2EEVT06 | Anónimo | `GET /api/events/by-artist` | 200 |
@@ -88,10 +88,10 @@ Orden recomendado para enviar las solicitudes de Postman. Marca cada casilla al 
 | [ ] | TC-SEC003 | USER_A | `POST /api/events/{{publishedEventCode}}/artists/{{artistId}}` | 403 |
 | [ ] | Integridad tras 403 | ADMIN | `GET /api/events/{{eventToPublishCode}} y {{newEventCode}}` | 200 DRAFT / 404 |
 | [ ] | E2EEVT01 / TC-BIZ003 | ADMIN | `POST /api/events` | 201 |
-| [ ] | Código duplicado | ADMIN | `POST /api/events` | 409 |
-| [ ] | Categoría inválida | ADMIN | `POST /api/events` | 400 |
-| [ ] | Venue inexistente | ADMIN | `POST /api/events` | 404 |
-| [ ] | Falta name | ADMIN | `POST /api/events` | 400 |
+| [ ] | TC-BIZ015-dup | ADMIN | `POST /api/events` | 409 |
+| [ ] | TC-BIZ015-cat | ADMIN | `POST /api/events` | 400 |
+| [ ] | TC-BIZ015-venue | ADMIN | `POST /api/events` | 404 |
+| [ ] | TC-BIZ015-name | ADMIN | `POST /api/events` | 400 |
 | [ ] | TC-SEC004 (borrador anónimo) | Anónimo | `GET /api/events/{{newEventCode}}` | 404 |
 | [ ] | TC-SEC015 | ADMIN | `GET /api/events/{{newEventCode}}` | 200 |
 | [ ] | Borrador con STAFF | STAFF | `GET /api/events/{{newEventCode}}` | 200 |
@@ -109,8 +109,8 @@ Orden recomendado para enviar las solicitudes de Postman. Marca cada casilla al 
 | ☐ | Caso | Actor | Solicitud | Esperado |
 |---|---|---|---|---|
 | [ ] | E2ETKT01 / TC-BIZ007 | USER_A | `POST /api/tickets (GENERAL)` | 201 |
-| [ ] | E2ETKT02 | USER_A | `GET /api/tickets/{{ticketCancelableCode}}` | 200 |
-| [ ] | E2ETKT03 | USER_A | `GET /api/tickets/by-user?email=A` | 200 |
+| [ ] | E2ETKT02 / TC-BIZ008 | USER_A | `GET /api/tickets/{{ticketCancelableCode}}` | 200 |
+| [ ] | E2ETKT03 / TC-BIZ008 | USER_A | `GET /api/tickets/by-user?email=A` | 200 |
 | [ ] | E2EUSR02 | USER_A | `GET /api/users/by-email?email=A` | 200 |
 | [ ] | E2EUSR03 | USER_A | `GET /api/users/by-username?username=A` | 200 |
 | [ ] | TC-SEC006 | USER_B | `GET /api/users/by-email?email=A` | 403 |
@@ -131,8 +131,8 @@ Orden recomendado para enviar las solicitudes de Postman. Marca cada casilla al 
 | [ ] | Compra T2 (VIP) | USER_A | `POST /api/tickets` | 201 |
 | [ ] | E2ETKT04 / TC-BIZ009 | STAFF | `GET /api/events/{{publishedEventCode}}/tickets/paid` | 200 |
 | [ ] | TC-SEC013 | USER_A | `GET .../tickets/paid` | 403 |
-| [ ] | USER usa ticket | USER_A | `PATCH .../use (T2)` | 403 |
-| [ ] | E2ETKT06 / TC-BIZ012 | STAFF | `PATCH .../use (T2)` | 200 |
+| [ ] | TC-SEC014-pre (USER usa ticket) | USER_A | `PATCH .../use (T2)` | 403 |
+| [ ] | E2ETKT06 / TC-BIZ012 / TC-SEC014 | STAFF | `PATCH .../use (T2)` | 200 |
 | [ ] | Reconsulta T2 | USER_A | `GET /api/tickets/{{ticketUsableCode}}` | 200 |
 | [ ] | TC-BIZ013 | STAFF | `PATCH .../use (T2 otra vez)` | 409 |
 | [ ] | Usar ticket cancelado | STAFF | `PATCH .../use (T1)` | 409 |
@@ -161,6 +161,18 @@ Orden recomendado para enviar las solicitudes de Postman. Marca cada casilla al 
 | [ ] | 415 | USER_A | `POST con Content-Type text/plain` | 415 |
 | [ ] | ErrorResponse | — | `Revisar en cada error` | — |
 | [ ] | Ningún 500 | — | `Revisar en toda la ejecución` | — |
+
+## Casos pendientes (TC-SEC005 y TC-SEC017)
+
+> Se envían al final. `TC-SEC005-pre` se envía una sola vez: repetirlo da 409. `TC-SEC017` necesita el cambio de rol por SQL de `fixtures/README.md` entre las dos solicitudes y usa USER_C una vez terminado el caso de edad insuficiente.
+
+| ☐ | Caso | Actor | Solicitud | Esperado |
+|---|---|---|---|---|
+| [ ] | TC-SEC005-pre | ADMIN | `POST /api/events/{{draftEventCode}}/artists/{{artistId}}` | 200, sigue en DRAFT |
+| [ ] | TC-SEC005a | Anónimo | `GET /api/events/by-artist?stageName={{artistStageName}}` | 200, sin EVT-E2E-DRAFT |
+| [ ] | TC-SEC005b | ADMIN | `GET /api/events/by-artist?stageName={{artistStageName}}` | 200, con EVT-E2E-DRAFT |
+| [ ] | TC-SEC017a | USER_C con STAFF temporal | `GET /api/events/{{draftEventCode}}` | 200 |
+| [ ] | TC-SEC017b | USER_C, mismo token, STAFF revocado | `GET /api/events/{{draftEventCode}}` | 404 |
 
 ## Cierre
 
