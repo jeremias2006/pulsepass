@@ -1,0 +1,24 @@
+# Secretos y evidencias: nunca versionar
+.env
+.env.*
+!.env.example
+
+# Ambientes de Postman exportados con valores reales (la plantilla sin secretos sí se versiona)
+*.postman_environment.local.json
+*.postman_globals.json
+postman_globals.json
+
+# Evidencias y capturas que puedan contener tokens o datos personales
+evidencia/
+capturas/
+screenshots/
+*.har
+
+# Claves y archivos de entorno
+*.pem
+*.key
+*.secret
+
+# Dumps y copias de base de datos
+*.dump
+*.bak
