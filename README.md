@@ -306,3 +306,86 @@ con el contrato `ErrorResponse`.
 `UserControllerTest` (13) · `TicketControllerTest` (15). Cubren AC-CTRL001 a AC-CTRL014
 (ver comentarios `// TEST-CTRL-… / AC-CTRL…` en cada test). AC-CTRL015 y AC-CTRL016 se
 verifican por diseño: ningún Controller importa un Repository ni una entidad de `domain`.
+
+## 10. Seguridad (Fase 4) — Spring Security + JJWT
+
+La API es *stateless*: cada request protegido lleva `Authorization: Bearer <JWT>`. El JWT (HS256,
+15 min) solo contiene `sub` (ID del usuario), `iss`, `iat`, `exp` y `jti`; el estado y los roles se
+recargan desde la base de datos en **cada** request, por lo que un usuario desactivado o con rol
+retirado pierde acceso de inmediato.
+
+### 10.1 Variables de entorno
+
+| Variable | Obligatoria | Descripción |
+|---|---|---|
+| `PULSEPASS_JWT_SECRET_BASE64` | **Sí** | Secreto HMAC en Base64 (≥ 32 bytes). Sin ella la app no arranca. |
+| `PULSEPASS_JWT_ISSUER` | No | Emisor esperado (por defecto `pulsepass-api`). |
+| `PULSEPASS_CORS_ORIGINS` | No | Orígenes CORS permitidos, separados por comas. Vacío = ninguno. |
+| `PULSEPASS_BOOTSTRAP_ADMIN_PASSWORD` | Solo perfil `local` | Contraseña de la cuenta semilla `admin` (≥ 12 caracteres). |
+| `PULSEPASS_BOOTSTRAP_STAFF_PASSWORD` | Solo perfil `local` | Contraseña de la cuenta semilla `laura` (≥ 12 caracteres). |
+
+Generar el secreto: `openssl rand -base64 32` (en PowerShell, ver la guía de implementación).
+Hay una plantilla sin secretos en `.env.example`; el archivo `.env` real está en `.gitignore`.
+
+### 10.2 Roles y cuentas de prueba
+
+| Rol | Cómo se obtiene | Cuenta de demo |
+|---|---|---|
+| `USER` | Registro público (`POST /api/users`); es el único rol posible por HTTP | `andrea`, `carlos`… |
+| `STAFF` | Semilla local (`LocalAccountsSeeder`, perfil `local`) | `laura` |
+| `ADMIN` | Semilla local (`LocalAccountsSeeder`, perfil `local`) | `admin` |
+
+Los roles privilegiados **nunca** se asignan por HTTP. Los usuarios creados en las fases 1–3 no
+tienen credencial y no pueden iniciar sesión hasta que se les active una de forma segura.
+
+### 10.3 Endpoints nuevos y cambio de contrato
+
+| Método | Endpoint | Acceso | Respuesta |
+|---|---|---|---|
+| POST | `/api/auth/login` | Público | 200 `{accessToken, tokenType: "Bearer", expiresIn: 900}`; 401 genérico si falla |
+| GET | `/api/auth/me` | Bearer | 200 `{id, username, email, roles}` |
+
+`POST /api/users` **cambia su contrato de entrada**: ahora exige `password` (12–72 caracteres/bytes).
+La respuesta (`UserResponse`) sigue sin incluir contraseña ni hash, y el registro no devuelve token:
+el flujo del MVP es *registro → login*.
+
+### 10.4 Matriz de autorización de las 20 rutas
+
+| Ruta | Acceso |
+|---|---|
+| `GET /api/venues/{code}`, `GET /api/venues/active` | Público |
+| `GET /api/artists/{id}`, `/by-stage-name`, `/active` | Público |
+| `GET /api/events/published` | Público |
+| `GET /api/events/{eventCode}`, `GET /api/events/by-artist` | Público **solo eventos publicados** (borrador → 404); STAFF/ADMIN ven todos |
+| `POST /api/events`, `PATCH /api/events/{eventCode}/publish`, `POST /api/events/{eventCode}/artists/{artistId}` | `ADMIN` |
+| `POST /api/users` | Público (rol inicial siempre `USER`) |
+| `GET /api/users/by-email`, `GET /api/users/by-username` | El propio usuario, o `ADMIN` |
+| `POST /api/tickets` | `USER`, y `userEmail` debe ser el del usuario autenticado |
+| `GET /api/tickets/{ticketCode}` | Propietario, o `STAFF`/`ADMIN` |
+| `GET /api/tickets/by-user?email=` | El propio usuario, o `ADMIN` |
+| `PATCH /api/tickets/{ticketCode}/cancel` | Propietario (`USER`), o `ADMIN` |
+| `PATCH /api/tickets/{ticketCode}/use`, `GET /api/events/{eventCode}/tickets/paid` | `STAFF`/`ADMIN` |
+
+Política de propiedad: un recurso ajeno (o un ticket inexistente) responde **403** de forma
+uniforme, para no revelar qué códigos existen. `401` = sin identidad válida; `403` = identidad
+válida sin permiso. Ambos usan el mismo `ErrorResponse` de seis campos.
+
+### 10.5 Comandos
+
+```bash
+./mvnw clean verify                                   # unitarias + MockMvc + integración (requiere Docker)
+./mvnw test -Dtest=SecurityMatrixTest                 # matriz de roles sobre las rutas, sin Docker
+SPRING_PROFILES_ACTIVE=local ./mvnw spring-boot:run   # arranca con las cuentas semilla admin y laura
+```
+
+### 10.6 Limitaciones declaradas (no es un sistema listo para producción)
+
+- Sin *refresh tokens*, sin logout con invalidación y sin revocación por `jti`: un token robado vale hasta que vence (15 min).
+- Sin límite de intentos de login ni protección contra fuerza bruta.
+- Clave HMAC simétrica sin rotación ni identificadores de clave.
+- `STAFF` es global: el dominio aún no asigna personal a eventos concretos.
+- `ADMIN` puede consultar usuarios y tickets ajenos sin registro de "propósito" auditado.
+- HTTPS es obligatorio fuera de localhost; la app no lo impone por sí sola.
+- CORS depende de `PULSEPASS_CORS_ORIGINS`; vacío significa ningún origen permitido.
+- Los usuarios legados (fases 1–3) no tienen credencial y no pueden iniciar sesión.
+- `application.properties` conserva las credenciales de la base de datos local de desarrollo (`postgres`/`postgres`); en cualquier otro entorno deben sobrescribirse con variables de entorno.
