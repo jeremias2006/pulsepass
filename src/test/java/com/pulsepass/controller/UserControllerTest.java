@@ -15,6 +15,16 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import com.pulsepass.security.CustomUserDetailsService;
+import com.pulsepass.security.JwtService;
+import com.pulsepass.security.RestAccessDeniedHandler;
+import com.pulsepass.security.RestAuthenticationEntryPoint;
+import com.pulsepass.security.SecurityConfig;
+import com.pulsepass.security.SecurityErrorWriter;
+import com.pulsepass.service.AuthService;
+import com.pulsepass.service.AuthorizationService;
+import org.springframework.security.test.context.support.WithMockUser;
+
 import java.time.LocalDate;
 
 import static org.hamcrest.Matchers.containsString;
@@ -30,14 +40,25 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(UserController.class)
-@Import(GlobalExceptionHandler.class)
+@Import({GlobalExceptionHandler.class, SecurityConfig.class, SecurityErrorWriter.class,
+        RestAuthenticationEntryPoint.class, RestAccessDeniedHandler.class})
 class UserControllerTest {
 
     @Autowired
     private MockMvc mockMvc;
 
     @MockitoBean
-    private UserService userService;
+    private UserService userService;      // sigue haciendo falta: by-email y by-username
+    @MockitoBean
+    private AuthService authService;      // NUEVO: register ahora pasa por aquí
+
+    // SecurityConfig los necesita para construir la cadena de filtros
+    @MockitoBean
+    private JwtService jwtService;
+    @MockitoBean
+    private CustomUserDetailsService customUserDetailsService;
+    @MockitoBean
+    private AuthorizationService authorizationService;
 
     private static final String VALID_BODY = """
             {
@@ -69,7 +90,7 @@ class UserControllerTest {
     // TEST-CTRL-USR-001 / AC-CTRL007: registro válido -> 201
     @Test
     void shouldRegisterUser() throws Exception {
-        when(userService.register(any(RegisterUserRequest.class))).thenReturn(andrea());
+        when(authService.register(any(RegisterUserRequest.class))).thenReturn(andrea());
 
         mockMvc.perform(post("/api/users")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -81,13 +102,13 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.active").value(true))
                 .andExpect(jsonPath("$.firstName").value("Andrea"));
 
-        verify(userService).register(any(RegisterUserRequest.class));
+        verify(authService).register(any(RegisterUserRequest.class));
     }
 
     // phone y city son opcionales: sin ellos también es válido
     @Test
     void shouldRegisterUserWithoutOptionalFields() throws Exception {
-        when(userService.register(any(RegisterUserRequest.class))).thenReturn(andrea());
+        when(authService.register(any(RegisterUserRequest.class))).thenReturn(andrea());
 
         mockMvc.perform(post("/api/users")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -103,7 +124,7 @@ class UserControllerTest {
                                 """))
                 .andExpect(status().isCreated());
 
-        verify(userService).register(any(RegisterUserRequest.class));
+        verify(authService).register(any(RegisterUserRequest.class));
     }
 
     // TEST-CTRL-USR-002: email inválido -> 400, Service nunca invocado
@@ -118,7 +139,7 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.message").value("Validation failed"))
                 .andExpect(jsonPath("$.details.email").value("Email format is invalid"));
 
-        verify(userService, never()).register(any());
+        verify(authService, never()).register(any());
     }
 
     // Extra: body vacío -> todos los obligatorios en details
@@ -134,7 +155,7 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.details.lastName").value("Last name is required"))
                 .andExpect(jsonPath("$.details.birthDate").value("Birth date is required"))
                 .andExpect(jsonPath("$.details.password").value("Password is required"));
-        verify(userService, never()).register(any());
+        verify(authService, never()).register(any());
     }
 
     // Extra: JSON mal formado -> 400
@@ -146,13 +167,13 @@ class UserControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("Malformed or invalid JSON request"));
 
-        verify(userService, never()).register(any());
+        verify(authService, never()).register(any());
     }
 
     // TEST-CTRL-USR-003 / AC-CTRL008: username duplicado -> 409 sin detalles internos
     @Test
     void shouldReturn409WhenUsernameAlreadyExists() throws Exception {
-        when(userService.register(any(RegisterUserRequest.class)))
+        when(authService.register(any(RegisterUserRequest.class)))
                 .thenThrow(new DuplicateResourceException("Username already exists: andrea"));
 
         mockMvc.perform(post("/api/users")
@@ -169,7 +190,7 @@ class UserControllerTest {
     // Extra: email duplicado -> 409
     @Test
     void shouldReturn409WhenEmailAlreadyExists() throws Exception {
-        when(userService.register(any(RegisterUserRequest.class)))
+        when(authService.register(any(RegisterUserRequest.class)))
                 .thenThrow(new DuplicateResourceException("Email already exists: andrea@mail.com"));
 
         mockMvc.perform(post("/api/users")
@@ -182,7 +203,7 @@ class UserControllerTest {
     // Extra: fecha de nacimiento futura la rechaza el Service (regla de negocio) -> 409
     @Test
     void shouldReturn409WhenBirthDateIsInTheFuture() throws Exception {
-        when(userService.register(any(RegisterUserRequest.class)))
+        when(authService.register(any(RegisterUserRequest.class)))
                 .thenThrow(new BusinessRuleException("Birth date cannot be in the future: 2999-01-01"));
 
         mockMvc.perform(post("/api/users")
@@ -195,6 +216,7 @@ class UserControllerTest {
 
     // TEST-CTRL-USR-004: consultar por email -> 200
     @Test
+    @WithMockUser
     void shouldReturnUserByEmail() throws Exception {
         when(userService.findByEmail("andrea@mail.com")).thenReturn(andrea());
 
@@ -207,6 +229,7 @@ class UserControllerTest {
 
     // FR-CTRLUSR-002: email inexistente -> 404
     @Test
+    @WithMockUser
     void shouldReturn404WhenEmailDoesNotExist() throws Exception {
         when(userService.findByEmail("nadie@mail.com"))
                 .thenThrow(new ResourceNotFoundException("User not found: nadie@mail.com"));
@@ -218,6 +241,7 @@ class UserControllerTest {
 
     // Extra: falta ?email= -> 400 (no 500)
     @Test
+    @WithMockUser
     void shouldReturn400WhenEmailParamIsMissing() throws Exception {
         mockMvc.perform(get("/api/users/by-email"))
                 .andExpect(status().isBadRequest())
@@ -228,6 +252,7 @@ class UserControllerTest {
 
     // TEST-CTRL-USR-005: consultar por username -> 200
     @Test
+    @WithMockUser
     void shouldReturnUserByUsername() throws Exception {
         when(userService.findByUsername("andrea")).thenReturn(andrea());
 
@@ -240,11 +265,40 @@ class UserControllerTest {
 
     // FR-CTRLUSR-003: username inexistente -> 404
     @Test
+    @WithMockUser
     void shouldReturn404WhenUsernameDoesNotExist() throws Exception {
         when(userService.findByUsername("nadie"))
                 .thenThrow(new ResourceNotFoundException("User not found: nadie"));
 
         mockMvc.perform(get("/api/users/by-username").param("username", "nadie"))
                 .andExpect(status().isNotFound());
+    }
+
+    // Password demasiado corta (< 12) -> 400, AuthService nunca invocado
+    @Test
+    void shouldReturn400WhenPasswordIsTooShort() throws Exception {
+        mockMvc.perform(post("/api/users")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(VALID_BODY.replace("UnaFraseSeguraLarga2026!", "corta")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Validation failed"))
+                .andExpect(jsonPath("$.details.password")
+                        .value("Password must be between 12 and 72 characters"));
+
+        verify(authService, never()).register(any());
+    }
+
+    // 40 caracteres "ñ" = 80 bytes: pasa @Size (caracteres) pero excede el límite de BCrypt -> 400
+    @Test
+    void shouldReturn400WhenPasswordExceedsBcryptBytes() throws Exception {
+        String passwordOver72Bytes = "ñ".repeat(40);
+
+        mockMvc.perform(post("/api/users")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(VALID_BODY.replace("UnaFraseSeguraLarga2026!", passwordOver72Bytes)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Validation failed"));
+
+        verify(authService, never()).register(any());
     }
 }

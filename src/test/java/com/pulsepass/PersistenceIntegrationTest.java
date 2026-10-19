@@ -143,8 +143,8 @@ class PersistenceIntegrationTest {
     // ---------------------------------------------------------------------
 
     @Test
-    @DisplayName("QT-001: Flyway aplica V1, V2 y V3 sobre una base vacía")
-    void flywayAplicaLasTresMigraciones() {
+    @DisplayName("QT-001: Flyway aplica V1, V2, V3 y V4 sobre una base vacía")
+    void flywayAplicaTodasLasMigraciones() {
         @SuppressWarnings("unchecked")
         List<String> versiones = entityManager.createNativeQuery("""
                         SELECT version FROM flyway_schema_history
@@ -153,7 +153,7 @@ class PersistenceIntegrationTest {
                         """)
                 .getResultList();
 
-        assertEquals(List.of("1", "2", "3"), versiones);
+        assertEquals(List.of("1", "2", "3", "4"), versiones);
     }
 
     @Test
