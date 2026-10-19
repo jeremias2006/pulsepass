@@ -12,6 +12,8 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.AuthenticationException;
 
 import java.time.LocalDateTime;
 import java.util.Map;
@@ -129,4 +131,22 @@ public class GlobalExceptionHandler {
         );
         return ResponseEntity.status(status).body(body);
     }
+
+    // 403: @PreAuthorize denegó (incluye AuthorizationDeniedException) -----
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleAccessDenied(AccessDeniedException ex) {
+
+        log.warn("access_denied reason={}", ex.getClass().getSimpleName());
+        return build(HttpStatus.FORBIDDEN,
+                "No tiene permisos para realizar esta operación", Map.of());
+    }
+
+    // 401: login fallido (BadCredentialsException) y cualquier AuthenticationException
+    @ExceptionHandler(AuthenticationException.class)
+    public ResponseEntity<ErrorResponse> handleAuthentication(AuthenticationException ex) {
+
+        return build(HttpStatus.UNAUTHORIZED,
+                "Autenticación requerida o credenciales inválidas", Map.of());
+    }
+
 }
