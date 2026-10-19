@@ -1,14 +1,18 @@
 package com.pulsepass.security;
 
 import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.io.Encoders;
 import io.jsonwebtoken.security.Keys;
 import org.junit.jupiter.api.Test;
 
+import javax.crypto.SecretKey;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.Date;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -96,5 +100,53 @@ class JwtServiceTest {
 
         assertThatThrownBy(() -> service(NOW, ISSUER, weak))
                 .isInstanceOf(IllegalStateException.class);
+    }
+
+    // ---------- claim "iat" (PRD §12.1) ----------
+
+    /** Token firmado correctamente pero con iat/exp controlados por el test. iat == null => sin claim. */
+    private String signedToken(Instant issuedAt, Instant expiration) {
+        SecretKey key = Keys.hmacShaKeyFor(Decoders.BASE64.decode(SECRET));
+        var builder = Jwts.builder()
+                .subject("42")
+                .issuer(ISSUER)
+                .expiration(Date.from(expiration))
+                .id(UUID.randomUUID().toString());
+        if (issuedAt != null) {
+            builder.issuedAt(Date.from(issuedAt));
+        }
+        return builder.signWith(key, Jwts.SIG.HS256).compact();
+    }
+
+    @Test
+    void rejectsTokenWithoutIssuedAt() {
+        String token = signedToken(null, NOW.plusSeconds(900));
+
+        assertThatThrownBy(() -> service(NOW, ISSUER, SECRET).extractUserId(token))
+                .isInstanceOf(InvalidTokenException.class);
+    }
+
+    @Test
+    void rejectsTokenIssuedFarInTheFuture() {
+        String token = signedToken(NOW.plusSeconds(600), NOW.plusSeconds(1500));
+
+        assertThatThrownBy(() -> service(NOW, ISSUER, SECRET).extractUserId(token))
+                .isInstanceOf(InvalidTokenException.class);
+    }
+
+    @Test
+    void acceptsIssuedAtWithinClockSkew() {
+        String token = signedToken(NOW.plusSeconds(30), NOW.plusSeconds(930));
+
+        assertThat(service(NOW, ISSUER, SECRET).extractUserId(token)).isEqualTo(42L);
+    }
+
+    @Test
+    void rejectsExpirationNotAfterIssuedAt() {
+        // iat dentro de la tolerancia, exp futura pero anterior al iat
+        String token = signedToken(NOW.plusSeconds(30), NOW.plusSeconds(10));
+
+        assertThatThrownBy(() -> service(NOW, ISSUER, SECRET).extractUserId(token))
+                .isInstanceOf(InvalidTokenException.class);
     }
 }

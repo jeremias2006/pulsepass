@@ -20,6 +20,8 @@ public class JwtService {
 
     private static final String EXPECTED_ALGORITHM = "HS256";
     private static final int MIN_KEY_BYTES = 32;
+    // Tolerancia de desfase de reloj al validar "iat" (token emitido "en el futuro")
+    private static final Duration MAX_IAT_CLOCK_SKEW = Duration.ofSeconds(60);
 
     private final SecretKey key;
     private final String issuer;
@@ -79,17 +81,30 @@ public class JwtService {
 
             Claims claims = jws.getPayload();
             if (claims.getExpiration() == null
+                    || claims.getIssuedAt() == null
                     || claims.getId() == null
                     || claims.getSubject() == null
                     || claims.getSubject().isBlank()) {
                 throw new InvalidTokenException("Missing required claims");
             }
+            validateIssuedAt(claims);
             return Long.valueOf(claims.getSubject());
 
         } catch (JwtException | IllegalArgumentException ex) {
             // JwtException: expirado, firma, malformado, unsupported...
             // IllegalArgumentException: token vacío o "sub" no numérico
             throw new InvalidTokenException("Invalid token", ex);
+        }
+    }
+
+    /** PRD §12.1: rechazar "iat" inaceptable (en el futuro, o no anterior a "exp"). */
+    private void validateIssuedAt(Claims claims) {
+        Instant issuedAt = claims.getIssuedAt().toInstant();
+        if (issuedAt.isAfter(clock.instant().plus(MAX_IAT_CLOCK_SKEW))) {
+            throw new InvalidTokenException("Token issued in the future");
+        }
+        if (!claims.getExpiration().toInstant().isAfter(issuedAt)) {
+            throw new InvalidTokenException("Token expiration must be after issuance");
         }
     }
 }

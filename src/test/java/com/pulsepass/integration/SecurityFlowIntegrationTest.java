@@ -302,4 +302,52 @@ class SecurityFlowIntegrationTest {
                 .andExpect(jsonPath("$.roles.length()").value(1))
                 .andExpect(jsonPath("$.roles[0]").value("USER"));
     }
+
+    @Test
+    void userCannotReadForeignUserByUsernameButOwnerAndAdminCan() throws Exception {
+        String admin = "admin" + suffix, andrea = "andrea" + suffix, carlos = "carlos" + suffix;
+        createPrivileged(admin, Role.ADMIN);
+        register(andrea, andrea + "@mail.com");
+        register(carlos, carlos + "@mail.com");
+        String andreaAuth = login(andrea, PASSWORD);
+        String adminAuth = login(admin, PASSWORD);
+
+        // T-SEC-015: tercero => 403, sin datos del usuario
+        mockMvc.perform(get("/api/users/by-username").param("username", carlos)
+                        .header("Authorization", andreaAuth))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.status").value(403))
+                .andExpect(jsonPath("$.username").doesNotExist())
+                .andExpect(jsonPath("$.email").doesNotExist());
+
+        // usuario inexistente => también 403 (política D6: no revelar existencia)
+        mockMvc.perform(get("/api/users/by-username").param("username", "nadie" + suffix)
+                        .header("Authorization", andreaAuth))
+                .andExpect(status().isForbidden());
+
+        // propio => 200 (por ID persistente)
+        mockMvc.perform(get("/api/users/by-username").param("username", andrea)
+                        .header("Authorization", andreaAuth))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.username").value(andrea));
+        mockMvc.perform(get("/api/users/by-email").param("email", andrea + "@mail.com")
+                        .header("Authorization", andreaAuth))
+                .andExpect(status().isOk());
+
+        // ADMIN autorizado expresamente sobre datos ajenos
+        mockMvc.perform(get("/api/users/by-username").param("username", carlos)
+                        .header("Authorization", adminAuth))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.username").value(carlos));
+        mockMvc.perform(get("/api/users/by-email").param("email", carlos + "@mail.com")
+                        .header("Authorization", adminAuth))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/tickets/by-user").param("email", carlos + "@mail.com")
+                        .header("Authorization", adminAuth))
+                .andExpect(status().isOk());
+
+        // anónimo => 401
+        mockMvc.perform(get("/api/users/by-username").param("username", carlos))
+                .andExpect(status().isUnauthorized());
+    }
 }
