@@ -14,30 +14,39 @@ import com.pulsepass.mapper.EventMapper;
 import com.pulsepass.repository.ArtistRepository;
 import com.pulsepass.repository.EventRepository;
 import com.pulsepass.repository.VenueRepository;
+import com.pulsepass.service.AuthorizationService;      // NUEVO
 import com.pulsepass.service.EventService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.EnumSet;                               // NUEVO
 import java.util.List;
+import java.util.Set;                                   // NUEVO
 
 @Service
 @Transactional(readOnly = true)
 public class EventServiceImpl implements EventService {
 
+    // NUEVO: estados visibles para el público. Ampliar aquí si el negocio lo decide.
+    private static final Set<EventStatus> PUBLIC_STATUSES = EnumSet.of(EventStatus.PUBLISHED);
+
     private final EventRepository eventRepository;
     private final VenueRepository venueRepository;
     private final ArtistRepository artistRepository;
     private final EventMapper eventMapper;
+    private final AuthorizationService authorizationService;          // NUEVO
 
     public EventServiceImpl(EventRepository eventRepository,
                             VenueRepository venueRepository,
                             ArtistRepository artistRepository,
-                            EventMapper eventMapper) {
+                            EventMapper eventMapper,
+                            AuthorizationService authorizationService) {   // NUEVO (último parámetro)
         this.eventRepository = eventRepository;
         this.venueRepository = venueRepository;
         this.artistRepository = artistRepository;
         this.eventMapper = eventMapper;
+        this.authorizationService = authorizationService;
     }
 
     @Override
@@ -78,9 +87,15 @@ public class EventServiceImpl implements EventService {
         return eventMapper.toResponse(eventRepository.save(event));
     }
 
+    // CAMBIO (FR-SECEVT-02)
     @Override
     public EventResponse findByCode(String eventCode) {
-        return eventMapper.toResponse(getEventOrThrow(eventCode));
+        Event event = getEventOrThrow(eventCode);
+        // Un borrador no revela su existencia a anónimos/USER: 404, igual que si no existiera
+        if (!PUBLIC_STATUSES.contains(event.getStatus()) && !authorizationService.isStaffOrAdmin()) {
+            throw new ResourceNotFoundException("Event not found: " + eventCode);
+        }
+        return eventMapper.toResponse(event);
     }
 
     @Override
@@ -140,10 +155,14 @@ public class EventServiceImpl implements EventService {
         return eventMapper.toResponse(eventRepository.save(event));
     }
 
+    // CAMBIO (FR-SECEVT-06)
     @Override
     public List<EventSummaryResponse> findByArtist(String stageName) {
+        // El público solo ve eventos publicados; STAFF/ADMIN ven todos
+        boolean privileged = authorizationService.isStaffOrAdmin();
         return eventRepository.findByArtistStageName(stageName)
                 .stream()
+                .filter(e -> privileged || PUBLIC_STATUSES.contains(e.getStatus()))
                 .map(eventMapper::toSummary)
                 .toList();
     }

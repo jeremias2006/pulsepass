@@ -11,7 +11,12 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.AuthenticationException;
 
 import java.time.LocalDateTime;
 import java.util.Map;
@@ -102,6 +107,39 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.BAD_REQUEST, "Invalid request parameter", details);
     }
 
+    // 404: ruta inexistente (sin esto caería en el handler de Exception => 500) ----
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ErrorResponse> handleNoResource(NoResourceFoundException ex) {
+
+        return build(HttpStatus.NOT_FOUND, "Resource not found", Map.of());
+    }
+
+    // 405: verbo no soportado en una ruta existente ---------------------------------
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ErrorResponse> handleMethodNotSupported(
+            HttpRequestMethodNotSupportedException ex) {
+
+        ErrorResponse body = new ErrorResponse(
+                LocalDateTime.now(),
+                HttpStatus.METHOD_NOT_ALLOWED.value(),
+                HttpStatus.METHOD_NOT_ALLOWED.getReasonPhrase(),
+                "HTTP method not supported for this resource",
+                Map.of());
+        // ex.getHeaders() incluye el header "Allow" con los verbos válidos
+        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED)
+                .headers(ex.getHeaders())
+                .body(body);
+    }
+
+    // 415: Content-Type distinto de application/json en un endpoint con body -------
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<ErrorResponse> handleMediaTypeNotSupported(
+            HttpMediaTypeNotSupportedException ex) {
+
+        return build(HttpStatus.UNSUPPORTED_MEDIA_TYPE,
+                "Unsupported media type. Use application/json", Map.of());
+    }
+
     // 500: cualquier otra cosa ----------------------------------------
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleUnexpectedException(Exception ex) {
@@ -129,4 +167,22 @@ public class GlobalExceptionHandler {
         );
         return ResponseEntity.status(status).body(body);
     }
+
+    // 403: @PreAuthorize denegó (incluye AuthorizationDeniedException) -----
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleAccessDenied(AccessDeniedException ex) {
+
+        log.warn("access_denied reason={}", ex.getClass().getSimpleName());
+        return build(HttpStatus.FORBIDDEN,
+                "No tiene permisos para realizar esta operación", Map.of());
+    }
+
+    // 401: login fallido (BadCredentialsException) y cualquier AuthenticationException
+    @ExceptionHandler(AuthenticationException.class)
+    public ResponseEntity<ErrorResponse> handleAuthentication(AuthenticationException ex) {
+
+        return build(HttpStatus.UNAUTHORIZED,
+                "Autenticación requerida o credenciales inválidas", Map.of());
+    }
+
 }

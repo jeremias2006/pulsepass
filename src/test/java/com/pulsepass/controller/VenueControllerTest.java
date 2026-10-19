@@ -11,6 +11,13 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import com.pulsepass.security.CustomUserDetailsService;
+import com.pulsepass.security.JwtService;
+import com.pulsepass.security.RestAccessDeniedHandler;
+import com.pulsepass.security.RestAuthenticationEntryPoint;
+import com.pulsepass.security.SecurityConfig;
+import com.pulsepass.security.SecurityErrorWriter;
+import com.pulsepass.service.AuthorizationService;
 
 import java.util.List;
 
@@ -26,7 +33,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(VenueController.class)
-@Import(GlobalExceptionHandler.class)
+@Import({GlobalExceptionHandler.class, SecurityConfig.class, SecurityErrorWriter.class,
+        RestAuthenticationEntryPoint.class, RestAccessDeniedHandler.class})
 class VenueControllerTest {
 
     @Autowired
@@ -34,6 +42,14 @@ class VenueControllerTest {
 
     @MockitoBean
     private VenueService venueService;
+
+    // SecurityConfig los necesita para construir la cadena de filtros
+    @MockitoBean
+    private JwtService jwtService;
+    @MockitoBean
+    private CustomUserDetailsService customUserDetailsService;
+    @MockitoBean
+    private AuthorizationService authorizationService;
 
     private VenueResponse venue() {
         return new VenueResponse(

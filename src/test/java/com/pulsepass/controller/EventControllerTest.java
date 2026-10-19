@@ -18,7 +18,14 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
-
+import com.pulsepass.security.CustomUserDetailsService;
+import com.pulsepass.security.JwtService;
+import com.pulsepass.security.RestAccessDeniedHandler;
+import com.pulsepass.security.RestAuthenticationEntryPoint;
+import com.pulsepass.security.SecurityConfig;
+import com.pulsepass.security.SecurityErrorWriter;
+import com.pulsepass.service.AuthorizationService;
+import org.springframework.security.test.context.support.WithMockUser;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -36,7 +43,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(EventController.class)
-@Import(GlobalExceptionHandler.class)
+@Import({GlobalExceptionHandler.class, SecurityConfig.class, SecurityErrorWriter.class,
+        RestAuthenticationEntryPoint.class, RestAccessDeniedHandler.class})
 class EventControllerTest {
 
     @Autowired
@@ -44,6 +52,14 @@ class EventControllerTest {
 
     @MockitoBean
     private EventService eventService;
+
+    // SecurityConfig los necesita para construir la cadena de filtros
+    @MockitoBean
+    private JwtService jwtService;
+    @MockitoBean
+    private CustomUserDetailsService customUserDetailsService;
+    @MockitoBean
+    private AuthorizationService authorizationService;
 
     private static final String VALID_BODY = """
             {
@@ -87,6 +103,7 @@ class EventControllerTest {
 
     // TEST-CTRL-EVT-001 / AC-CTRL003: POST válido -> 201
     @Test
+    @WithMockUser(roles = "ADMIN")
     void shouldCreateEvent() throws Exception {
         when(eventService.create(any(CreateEventRequest.class)))
                 .thenReturn(event(EventStatus.DRAFT, List.of()));
@@ -107,6 +124,7 @@ class EventControllerTest {
 
     // TEST-CTRL-EVT-002 / AC-CTRL004: POST inválido -> 400 + details, Service nunca invocado
     @Test
+    @WithMockUser(roles = "ADMIN")
     void shouldReturn400WhenEventRequestIsInvalid() throws Exception {
         mockMvc.perform(post("/api/events")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -134,6 +152,7 @@ class EventControllerTest {
 
     // Extra: campos obligatorios ausentes (category, eventDate, minimumAge)
     @Test
+    @WithMockUser(roles = "ADMIN")
     void shouldReturn400WhenRequiredFieldsAreMissing() throws Exception {
         mockMvc.perform(post("/api/events")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -154,6 +173,7 @@ class EventControllerTest {
 
     // Extra: minimumAge negativo -> 400 (valor mínimo es validación estructural)
     @Test
+    @WithMockUser(roles = "ADMIN")
     void shouldReturn400WhenMinimumAgeIsNegative() throws Exception {
         mockMvc.perform(post("/api/events")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -167,6 +187,7 @@ class EventControllerTest {
 
     // Extra: categoría fuera del enum -> 400 (JSON inválido)
     @Test
+    @WithMockUser(roles = "ADMIN")
     void shouldReturn400WhenCategoryIsNotInEnum() throws Exception {
         mockMvc.perform(post("/api/events")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -181,6 +202,7 @@ class EventControllerTest {
 
     // Extra: JSON mal formado -> 400
     @Test
+    @WithMockUser(roles = "ADMIN")
     void shouldReturn400WhenJsonIsMalformed() throws Exception {
         mockMvc.perform(post("/api/events")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -193,6 +215,7 @@ class EventControllerTest {
 
     // Extra: eventCode duplicado (DuplicateResourceException) -> 409
     @Test
+    @WithMockUser(roles = "ADMIN")
     void shouldReturn409WhenEventCodeAlreadyExists() throws Exception {
         when(eventService.create(any(CreateEventRequest.class)))
                 .thenThrow(new DuplicateResourceException("Event code already exists: CMF-2026"));
@@ -208,6 +231,7 @@ class EventControllerTest {
 
     // Extra: venue inexistente al crear -> 404
     @Test
+    @WithMockUser(roles = "ADMIN")
     void shouldReturn404WhenVenueDoesNotExistOnCreate() throws Exception {
         when(eventService.create(any(CreateEventRequest.class)))
                 .thenThrow(new ResourceNotFoundException("Venue not found: VEN-SMR-01"));
@@ -221,6 +245,7 @@ class EventControllerTest {
 
     // Extra: venue inactivo / fecha pasada (BusinessRuleException) -> 409
     @Test
+    @WithMockUser(roles = "ADMIN")
     void shouldReturn409WhenVenueIsInactiveOnCreate() throws Exception {
         when(eventService.create(any(CreateEventRequest.class)))
                 .thenThrow(new BusinessRuleException("Venue is inactive: VEN-SMR-01"));
@@ -279,6 +304,7 @@ class EventControllerTest {
 
     // TEST-CTRL-EVT-006 / AC-CTRL005: publicar válido -> 200
     @Test
+    @WithMockUser(roles = "ADMIN")
     void shouldPublishEvent() throws Exception {
         when(eventService.publish("CMF-2026"))
                 .thenReturn(event(EventStatus.PUBLISHED, List.of()));
@@ -293,6 +319,7 @@ class EventControllerTest {
 
     // TEST-CTRL-EVT-007 / AC-CTRL006: publicar inválido -> 409
     @Test
+    @WithMockUser(roles = "ADMIN")
     void shouldReturn409WhenEventCannotBePublished() throws Exception {
         when(eventService.publish("CMF-2026"))
                 .thenThrow(new BusinessRuleException(
@@ -309,6 +336,7 @@ class EventControllerTest {
 
     // TEST-CTRL-EVT-008: asociar artista -> 200
     @Test
+    @WithMockUser(roles = "ADMIN")
     void shouldAddArtistToEvent() throws Exception {
         when(eventService.addArtist("CMF-2026", 1L))
                 .thenReturn(event(EventStatus.DRAFT,
@@ -325,6 +353,7 @@ class EventControllerTest {
 
     // Extra: artista ya asociado / evento CANCELLED o FINISHED -> 409
     @Test
+    @WithMockUser(roles = "ADMIN")
     void shouldReturn409WhenArtistIsAlreadyAssigned() throws Exception {
         when(eventService.addArtist("CMF-2026", 1L))
                 .thenThrow(new BusinessRuleException(
@@ -339,6 +368,7 @@ class EventControllerTest {
 
     // Extra: artista inexistente -> 404
     @Test
+    @WithMockUser(roles = "ADMIN")
     void shouldReturn404WhenArtistDoesNotExist() throws Exception {
         when(eventService.addArtist("CMF-2026", 99L))
                 .thenThrow(new ResourceNotFoundException("Artist not found: 99"));
@@ -350,6 +380,7 @@ class EventControllerTest {
 
     // Extra: artistId no numérico -> 400, Service nunca invocado
     @Test
+    @WithMockUser(roles = "ADMIN")
     void shouldReturn400WhenArtistIdIsNotNumeric() throws Exception {
         mockMvc.perform(post("/api/events/{eventCode}/artists/{artistId}", "CMF-2026", "abc"))
                 .andExpect(status().isBadRequest())

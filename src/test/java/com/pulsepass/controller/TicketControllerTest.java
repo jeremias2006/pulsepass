@@ -16,6 +16,15 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import com.pulsepass.security.CustomUserDetailsService;
+import com.pulsepass.security.JwtService;
+import com.pulsepass.security.RestAccessDeniedHandler;
+import com.pulsepass.security.RestAuthenticationEntryPoint;
+import com.pulsepass.security.SecurityConfig;
+import com.pulsepass.security.SecurityErrorWriter;
+import com.pulsepass.service.AuthorizationService;
+import org.springframework.security.test.context.support.WithMockUser;
+
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -32,7 +41,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(TicketController.class)
-@Import(GlobalExceptionHandler.class)
+@Import({GlobalExceptionHandler.class, SecurityConfig.class, SecurityErrorWriter.class,
+        RestAuthenticationEntryPoint.class, RestAccessDeniedHandler.class})
+@WithMockUser(roles = "USER")
 class TicketControllerTest {
 
     @Autowired
@@ -40,6 +51,14 @@ class TicketControllerTest {
 
     @MockitoBean
     private TicketService ticketService;
+
+    // SecurityConfig los necesita para construir la cadena de filtros
+    @MockitoBean
+    private JwtService jwtService;
+    @MockitoBean
+    private CustomUserDetailsService customUserDetailsService;
+    @MockitoBean
+    private AuthorizationService authorizationService;
 
     private static final String VALID_BODY = """
             {
@@ -214,6 +233,7 @@ class TicketControllerTest {
 
     // TEST-CTRL-TKT-007: tickets PAID por evento -> 200
     @Test
+    @WithMockUser(roles = "STAFF")
     void shouldReturnPaidTicketsByEvent() throws Exception {
         when(ticketService.findPaidTicketsByEvent("CMF-2026"))
                 .thenReturn(List.of(ticket(TicketStatus.PAID)));
@@ -254,6 +274,7 @@ class TicketControllerTest {
 
     // TEST-CTRL-TKT-010 / AC-CTRL013: usar ticket PAID -> 200
     @Test
+    @WithMockUser(roles = "STAFF")
     void shouldMarkTicketAsUsed() throws Exception {
         when(ticketService.markAsUsed("TKT-A1B2C3D4")).thenReturn(ticket(TicketStatus.USED));
 
@@ -266,6 +287,7 @@ class TicketControllerTest {
 
     // TEST-CTRL-TKT-011 / AC-CTRL014: usar ticket CANCELLED -> 409
     @Test
+    @WithMockUser(roles = "STAFF")
     void shouldReturn409WhenTicketCannotBeUsed() throws Exception {
         when(ticketService.markAsUsed("TKT-A1B2C3D4"))
                 .thenThrow(new BusinessRuleException(
