@@ -13,6 +13,15 @@ import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 
+/**
+ * Responde 403 (Forbidden) en formato JSON cuando un usuario SÍ autenticado intenta algo para lo que
+ * no tiene permiso (por ejemplo, un USER llamando a una ruta exclusiva de ADMIN).
+ *
+ * <p>Atiende las reglas por URL de {@code SecurityConfig}. Las denegaciones de {@code @PreAuthorize}
+ * (a nivel de método en los servicios) llegan como excepción y las resuelve {@code GlobalExceptionHandler},
+ * que también tiene un {@code @ExceptionHandler(AccessDeniedException.class)}; en ambos casos el
+ * cliente recibe el mismo 403 en JSON.</p>
+ */
 @Component
 public class RestAccessDeniedHandler implements AccessDeniedHandler {
 
@@ -27,6 +36,7 @@ public class RestAccessDeniedHandler implements AccessDeniedHandler {
     @Override
     public void handle(HttpServletRequest request, HttpServletResponse response,
                        AccessDeniedException accessDeniedException) throws IOException {
+        // Se registra en el log quién intentó qué (solo el nombre de usuario, nunca datos sensibles).
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         log.warn("access_denied user={} method={} path={}",
                 auth != null ? auth.getName() : "anonymous", request.getMethod(), request.getRequestURI());
