@@ -23,9 +23,31 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
+/**
+ * Traductor central de excepciones a respuestas HTTP. Convierte cada excepción en un
+ * {@link ErrorResponse} con la misma estructura, de modo que ningún controlador necesita
+ * {@code try/catch}.
+ *
+ * <p>{@code @RestControllerAdvice} hace que estos métodos apliquen a TODOS los controladores. Cuando
+ * se lanza una excepción, Spring elige el {@code @ExceptionHandler} cuyo tipo sea el más específico
+ * para esa excepción; el orden en el archivo no importa, y por eso {@code Exception.class} funciona
+ * como red de seguridad final.</p>
+ *
+ * <p>Resumen de códigos:</p>
+ * <ul>
+ *   <li>400: validación fallida, JSON ilegible, parámetro faltante o de tipo incorrecto.</li>
+ *   <li>401: autenticación requerida o credenciales inválidas. 403: sin permiso.</li>
+ *   <li>404: recurso inexistente o ruta inexistente. 405: verbo no soportado. 415: Content-Type no soportado.</li>
+ *   <li>409: recurso duplicado o regla de negocio violada.</li>
+ *   <li>500: cualquier error inesperado (el detalle solo se registra en el log, nunca se envía al cliente).</li>
+ * </ul>
+ * <p>Los errores 401/403 que ocurren en los filtros (antes de llegar a un controlador) no pasan por aquí:
+ * los resuelven {@code RestAuthenticationEntryPoint} y {@code RestAccessDeniedHandler}.</p>
+ */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    // Logger SLF4J: solo se usa para errores inesperados (500) y accesos denegados.
     private static final Logger log =
             LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
@@ -58,6 +80,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleValidation(
             MethodArgumentNotValidException ex) {
 
+        // Arma un mapa campo -> mensaje con cada error de validación (p. ej. "email" -> "Email format is invalid").
         Map<String, String> details = ex.getBindingResult()
                 .getFieldErrors()
                 .stream()
@@ -71,6 +94,7 @@ public class GlobalExceptionHandler {
     }
 
     // 400: JSON mal formado, fecha inválida o enum inválido en el body -
+    // El mensaje es fijo y genérico: no se devuelve el texto interno del parser de JSON.
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ErrorResponse> handleMessageNotReadable(
             HttpMessageNotReadableException ex) {
@@ -119,6 +143,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleMethodNotSupported(
             HttpRequestMethodNotSupportedException ex) {
 
+        // Aquí no se usa build() porque además hay que reenviar cabeceras (Allow) en la respuesta.
         ErrorResponse body = new ErrorResponse(
                 LocalDateTime.now(),
                 HttpStatus.METHOD_NOT_ALLOWED.value(),
@@ -145,6 +170,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleUnexpectedException(Exception ex) {
 
         // El detalle va al log del servidor, NUNCA al cliente.
+        // (Un mensaje de excepción interno podría revelar rutas, SQL o datos sensibles.)
         log.error("Unexpected error", ex);
 
         return build(
@@ -169,6 +195,7 @@ public class GlobalExceptionHandler {
     }
 
     // 403: @PreAuthorize denegó (incluye AuthorizationDeniedException) -----
+    // El orden de los métodos no afecta: Spring elige el handler más específico para cada excepción.
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ErrorResponse> handleAccessDenied(AccessDeniedException ex) {
 

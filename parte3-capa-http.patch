@@ -1,0 +1,890 @@
+From 7af57f03f67473e065e787e5a5df4a0ba332d5ed Mon Sep 17 00:00:00 2001
+From: Estudiante PulsePass <estudiante@example.com>
+Date: Sat, 14 Nov 2026 17:07:30 +0000
+Subject: [PATCH] =?UTF-8?q?docs(http):=20comenta=20controller,=20dto,=20ex?=
+ =?UTF-8?q?ception=20y=20mapper=20(parte=203=20de=20la=20documentaci=C3=B3?=
+ =?UTF-8?q?n=20del=20c=C3=B3digo)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Agrega Javadoc y comentarios explicativos a la capa HTTP: controladores
+(rutas, acceso y códigos de respuesta), DTOs de entrada/salida, excepciones
+propias, GlobalExceptionHandler y mappers MapStruct. Solo comentarios.
+---
+ .../controller/ArtistController.java          | 19 +++++++++++++
+ .../pulsepass/controller/AuthController.java  | 19 +++++++++++++
+ .../pulsepass/controller/EventController.java | 26 +++++++++++++++++-
+ .../controller/TicketController.java          | 23 +++++++++++++++-
+ .../pulsepass/controller/UserController.java  | 20 ++++++++++++--
+ .../pulsepass/controller/VenueController.java | 16 ++++++++++-
+ .../dto/request/CreateEventRequest.java       |  7 +++++
+ .../pulsepass/dto/request/LoginRequest.java   |  7 +++++
+ .../dto/request/PurchaseTicketRequest.java    |  7 +++++
+ .../dto/request/RegisterUserRequest.java      | 11 ++++++++
+ .../dto/response/ArtistResponse.java          |  1 +
+ .../pulsepass/dto/response/AuthResponse.java  |  7 +++++
+ .../response/AuthenticatedUserResponse.java   |  1 +
+ .../pulsepass/dto/response/ErrorResponse.java | 12 +++++++++
+ .../pulsepass/dto/response/EventResponse.java |  6 +++++
+ .../dto/response/EventSummaryResponse.java    |  1 +
+ .../dto/response/TicketResponse.java          |  7 +++++
+ .../pulsepass/dto/response/UserResponse.java  |  6 +++++
+ .../pulsepass/dto/response/VenueResponse.java |  1 +
+ .../exception/BusinessRuleException.java      |  6 +++++
+ .../exception/DuplicateResourceException.java |  5 ++++
+ .../exception/GlobalExceptionHandler.java     | 27 +++++++++++++++++++
+ .../exception/ResourceNotFoundException.java  |  7 +++++
+ .../com/pulsepass/mapper/ArtistMapper.java    |  5 ++++
+ .../com/pulsepass/mapper/EventMapper.java     |  8 ++++++
+ .../com/pulsepass/mapper/TicketMapper.java    |  6 +++++
+ .../java/com/pulsepass/mapper/UserMapper.java |  7 +++++
+ .../com/pulsepass/mapper/VenueMapper.java     |  5 ++++
+ 28 files changed, 268 insertions(+), 5 deletions(-)
+
+diff --git a/src/main/java/com/pulsepass/controller/ArtistController.java b/src/main/java/com/pulsepass/controller/ArtistController.java
+index 0955173..dfc6d83 100644
+--- a/src/main/java/com/pulsepass/controller/ArtistController.java
++++ b/src/main/java/com/pulsepass/controller/ArtistController.java
+@@ -11,10 +11,23 @@ import org.springframework.web.bind.annotation.RestController;
+ 
+ import java.util.List;
+ 
++/**
++ * Endpoints REST de artistas (solo lectura, públicos): {@code /api/artists}.
++ *
++ * <p>Capa Controller: solo traduce entre HTTP y Java. Lee la petición (ruta, parámetros, cuerpo JSON),
++ * delega TODO el trabajo en el servicio y devuelve un {@code ResponseEntity} con el código HTTP y el
++ * cuerpo. No contiene reglas de negocio ni habla con los repositorios.</p>
++ *
++ * <p>Anotaciones habituales: {@code @RestController} (cada método devuelve datos que Spring serializa
++ * a JSON), {@code @RequestMapping} (prefijo común de las rutas) y {@code @GetMapping} /
++ * {@code @PostMapping} / {@code @PatchMapping} (verbo HTTP + ruta). Los errores no se manejan aquí:
++ * las excepciones las traduce {@code GlobalExceptionHandler}.</p>
++ */
+ @RestController
+ @RequestMapping("/api/artists")
+ public class ArtistController {
+ 
++    // Único colaborador: el servicio. Inmutable (final) e inyectado por constructor.
+     private final ArtistService artistService;
+ 
+     public ArtistController(ArtistService artistService) {
+@@ -22,6 +35,7 @@ public class ArtistController {
+     }
+ 
+     // GET /api/artists/active
++    // Público. Lista los artistas activos. Responde 200.
+     @GetMapping("/active")
+     public ResponseEntity<List<ArtistResponse>> findActiveArtists() {
+ 
+@@ -29,6 +43,8 @@ public class ArtistController {
+     }
+ 
+     // GET /api/artists/by-stage-name?stageName=Solar Beat
++    // Público. @RequestParam lee ?stageName= de la URL y es obligatorio (si falta, 400).
++    // Si no existe un artista con ese nombre, el servicio lanza ResourceNotFoundException -> 404.
+     @GetMapping("/by-stage-name")
+     public ResponseEntity<ArtistResponse> findByStageName(
+             @RequestParam String stageName) {
+@@ -37,6 +53,9 @@ public class ArtistController {
+     }
+ 
+     // GET /api/artists/{id}
++    // Público. @PathVariable toma {id} de la ruta y lo convierte a Long: si no es numérico
++    // (p. ej. /api/artists/abc) responde 400. Las rutas literales (/active, /by-stage-name)
++    // tienen prioridad sobre esta ruta con variable.
+     @GetMapping("/{id}")
+     public ResponseEntity<ArtistResponse> findById(
+             @PathVariable Long id) {
+diff --git a/src/main/java/com/pulsepass/controller/AuthController.java b/src/main/java/com/pulsepass/controller/AuthController.java
+index 6e5f85c..da5066e 100644
+--- a/src/main/java/com/pulsepass/controller/AuthController.java
++++ b/src/main/java/com/pulsepass/controller/AuthController.java
+@@ -14,10 +14,23 @@ import org.springframework.web.bind.annotation.RequestBody;
+ import org.springframework.web.bind.annotation.RequestMapping;
+ import org.springframework.web.bind.annotation.RestController;
+ 
++/**
++ * Endpoints de autenticación: {@code /api/auth} (iniciar sesión y consultar "quién soy").
++ *
++ * <p>Capa Controller: solo traduce entre HTTP y Java. Lee la petición (ruta, parámetros, cuerpo JSON),
++ * delega TODO el trabajo en el servicio y devuelve un {@code ResponseEntity} con el código HTTP y el
++ * cuerpo. No contiene reglas de negocio ni habla con los repositorios.</p>
++ *
++ * <p>Anotaciones habituales: {@code @RestController} (cada método devuelve datos que Spring serializa
++ * a JSON), {@code @RequestMapping} (prefijo común de las rutas) y {@code @GetMapping} /
++ * {@code @PostMapping} / {@code @PatchMapping} (verbo HTTP + ruta). Los errores no se manejan aquí:
++ * las excepciones las traduce {@code GlobalExceptionHandler}.</p>
++ */
+ @RestController
+ @RequestMapping("/api/auth")
+ public class AuthController {
+ 
++    // AuthService es una clase concreta (no tiene interfaz); se inyecta por constructor.
+     private final AuthService authService;
+ 
+     public AuthController(AuthService authService) {
+@@ -25,12 +38,18 @@ public class AuthController {
+     }
+ 
+     // POST /api/auth/login  ->  200
++    // Público. @RequestBody convierte el JSON del cuerpo en un LoginRequest y @Valid ejecuta sus
++    // validaciones ANTES de entrar al método (si fallan, 400). Devuelve el token JWT.
++    // Credenciales incorrectas -> AuthService lanza BadCredentialsException -> 401.
+     @PostMapping("/login")
+     public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
+         return ResponseEntity.ok(authService.login(request));
+     }
+ 
+     // GET /api/auth/me  ->  200
++    // Requiere token. @AuthenticationPrincipal inyecta el SecurityPrincipal que dejó
++    // JwtAuthenticationFilter en el SecurityContext; no viene del cliente. Sin token válido, la petición
++    // ni siquiera llega aquí (responde 401).
+     @GetMapping("/me")
+     public ResponseEntity<AuthenticatedUserResponse> me(@AuthenticationPrincipal SecurityPrincipal principal) {
+         return ResponseEntity.ok(authService.me(principal));
+diff --git a/src/main/java/com/pulsepass/controller/EventController.java b/src/main/java/com/pulsepass/controller/EventController.java
+index a917b96..a34e22a 100644
+--- a/src/main/java/com/pulsepass/controller/EventController.java
++++ b/src/main/java/com/pulsepass/controller/EventController.java
+@@ -18,29 +18,47 @@ import org.springframework.web.bind.annotation.RestController;
+ 
+ import java.util.List;
+ 
++/**
++ * Endpoints REST de eventos: {@code /api/events}. Las consultas son públicas; crear, publicar y
++ * asignar artistas son exclusivos de ADMIN.
++ *
++ * <p>Capa Controller: solo traduce entre HTTP y Java. Lee la petición (ruta, parámetros, cuerpo JSON),
++ * delega TODO el trabajo en el servicio y devuelve un {@code ResponseEntity} con el código HTTP y el
++ * cuerpo. No contiene reglas de negocio ni habla con los repositorios.</p>
++ *
++ * <p>Anotaciones habituales: {@code @RestController} (cada método devuelve datos que Spring serializa
++ * a JSON), {@code @RequestMapping} (prefijo común de las rutas) y {@code @GetMapping} /
++ * {@code @PostMapping} / {@code @PatchMapping} (verbo HTTP + ruta). Los errores no se manejan aquí:
++ * las excepciones las traduce {@code GlobalExceptionHandler}.</p>
++ */
+ @RestController
+ @RequestMapping("/api/events")
+ public class EventController {
+ 
+-    private final EventService eventService;
++    private final EventService eventService;   // inyectado por constructor
+ 
+     public EventController(EventService eventService) {
+         this.eventService = eventService;
+     }
+ 
+     // POST /api/events  ->  201 Created
++    // Solo ADMIN. Crea el evento en estado DRAFT. @Valid valida la FORMA del JSON (campos obligatorios,
++    // longitudes); las reglas de NEGOCIO (fecha futura, recinto activo...) las valida el servicio.
++    // 201 en lugar de 200 porque se crea un recurso nuevo.
+     @PostMapping
+     public ResponseEntity<EventResponse> create(
+             @Valid @RequestBody CreateEventRequest request) {
+ 
+         EventResponse response = eventService.create(request);
+ 
++        // ResponseEntity permite elegir el código HTTP (201) y el cuerpo (el evento creado).
+         return ResponseEntity
+                 .status(HttpStatus.CREATED)
+                 .body(response);
+     }
+ 
+     // GET /api/events/published
++    // Público. Lista resumida de los eventos PUBLISHED.
+     @GetMapping("/published")
+     public ResponseEntity<List<EventSummaryResponse>> findPublishedEvents() {
+ 
+@@ -48,6 +66,8 @@ public class EventController {
+     }
+ 
+     // GET /api/events/by-artist?stageName=Solar Beat
++    // Público. Eventos en los que participa el artista; el servicio oculta los no publicados a quien
++    // no sea STAFF/ADMIN.
+     @GetMapping("/by-artist")
+     public ResponseEntity<List<EventSummaryResponse>> findByArtist(
+             @RequestParam String stageName) {
+@@ -56,6 +76,8 @@ public class EventController {
+     }
+ 
+     // GET /api/events/{eventCode}
++    // Público. Un evento no publicado solo lo ve STAFF/ADMIN; para los demás responde 404.
++    // Las rutas literales (/published, /by-artist) tienen prioridad sobre esta ruta con variable.
+     @GetMapping("/{eventCode}")
+     public ResponseEntity<EventResponse> findByCode(
+             @PathVariable String eventCode) {
+@@ -64,6 +86,7 @@ public class EventController {
+     }
+ 
+     // PATCH /api/events/{eventCode}/publish
++    // Solo ADMIN. PATCH = modificación parcial: aquí solo cambia el estado (DRAFT -> PUBLISHED).
+     @PatchMapping("/{eventCode}/publish")
+     public ResponseEntity<EventResponse> publish(
+             @PathVariable String eventCode) {
+@@ -72,6 +95,7 @@ public class EventController {
+     }
+ 
+     // POST /api/events/{eventCode}/artists/{artistId}
++    // Solo ADMIN. Asigna un artista existente al evento y devuelve el evento actualizado (200).
+     @PostMapping("/{eventCode}/artists/{artistId}")
+     public ResponseEntity<EventResponse> addArtist(
+             @PathVariable String eventCode,
+diff --git a/src/main/java/com/pulsepass/controller/TicketController.java b/src/main/java/com/pulsepass/controller/TicketController.java
+index 48d4dd9..1d8423b 100644
+--- a/src/main/java/com/pulsepass/controller/TicketController.java
++++ b/src/main/java/com/pulsepass/controller/TicketController.java
+@@ -19,17 +19,33 @@ import java.util.List;
+ 
+ // Prefijo "/api" (y no "/api/tickets") porque el endpoint de tickets pagados
+ // cuelga de /api/events/{eventCode}/... pero pertenece a TicketService.
++/**
++ * Endpoints REST de tickets: comprar, consultar, cancelar y marcar como usado.
++ * Quién puede hacer cada cosa se indica en cada método (reglas por URL en {@code SecurityConfig} y
++ * {@code @PreAuthorize} en {@code TicketService}).
++ *
++ * <p>Capa Controller: solo traduce entre HTTP y Java. Lee la petición (ruta, parámetros, cuerpo JSON),
++ * delega TODO el trabajo en el servicio y devuelve un {@code ResponseEntity} con el código HTTP y el
++ * cuerpo. No contiene reglas de negocio ni habla con los repositorios.</p>
++ *
++ * <p>Anotaciones habituales: {@code @RestController} (cada método devuelve datos que Spring serializa
++ * a JSON), {@code @RequestMapping} (prefijo común de las rutas) y {@code @GetMapping} /
++ * {@code @PostMapping} / {@code @PatchMapping} (verbo HTTP + ruta). Los errores no se manejan aquí:
++ * las excepciones las traduce {@code GlobalExceptionHandler}.</p>
++ */
+ @RestController
+ @RequestMapping("/api")
+ public class TicketController {
+ 
+-    private final TicketService ticketService;
++    private final TicketService ticketService;   // inyectado por constructor
+ 
+     public TicketController(TicketService ticketService) {
+         this.ticketService = ticketService;
+     }
+ 
+     // POST /api/tickets  ->  201 Created
++    // Solo USER, y el userEmail del body debe ser el del usuario autenticado (FR-SECTKT-01).
++    // El body NO incluye precio: lo calcula el servidor según el tipo de ticket.
+     @PostMapping("/tickets")
+     public ResponseEntity<TicketResponse> purchase(
+             @Valid @RequestBody PurchaseTicketRequest request) {
+@@ -42,6 +58,7 @@ public class TicketController {
+     }
+ 
+     // GET /api/tickets/by-user?email=andrea@mail.com
++    // El propietario o ADMIN (FR-SECTKT-03). Spring da prioridad a esta ruta literal sobre /{ticketCode}.
+     @GetMapping("/tickets/by-user")
+     public ResponseEntity<List<TicketResponse>> findByUserEmail(
+             @RequestParam String email) {
+@@ -50,6 +67,7 @@ public class TicketController {
+     }
+ 
+     // GET /api/tickets/{ticketCode}
++    // El propietario del ticket, o STAFF/ADMIN (FR-SECTKT-02).
+     @GetMapping("/tickets/{ticketCode}")
+     public ResponseEntity<TicketResponse> findByCode(
+             @PathVariable String ticketCode) {
+@@ -58,6 +76,7 @@ public class TicketController {
+     }
+ 
+     // PATCH /api/tickets/{ticketCode}/cancel
++    // ADMIN, o USER propietario (FR-SECTKT-05). Solo cambia el estado del ticket (PAID -> CANCELLED).
+     @PatchMapping("/tickets/{ticketCode}/cancel")
+     public ResponseEntity<TicketResponse> cancel(
+             @PathVariable String ticketCode) {
+@@ -66,6 +85,7 @@ public class TicketController {
+     }
+ 
+     // PATCH /api/tickets/{ticketCode}/use
++    // Solo STAFF/ADMIN (FR-SECTKT-06). Marca el ticket como usado (PAID -> USED).
+     @PatchMapping("/tickets/{ticketCode}/use")
+     public ResponseEntity<TicketResponse> markAsUsed(
+             @PathVariable String ticketCode) {
+@@ -74,6 +94,7 @@ public class TicketController {
+     }
+ 
+     // GET /api/events/{eventCode}/tickets/paid
++    // Solo STAFF/ADMIN (FR-SECTKT-04). Cuelga de /events pero lo atiende TicketService (ver nota de la clase).
+     @GetMapping("/events/{eventCode}/tickets/paid")
+     public ResponseEntity<List<TicketResponse>> findPaidTicketsByEvent(
+             @PathVariable String eventCode) {
+diff --git a/src/main/java/com/pulsepass/controller/UserController.java b/src/main/java/com/pulsepass/controller/UserController.java
+index 1bbc4dd..bbd6782 100644
+--- a/src/main/java/com/pulsepass/controller/UserController.java
++++ b/src/main/java/com/pulsepass/controller/UserController.java
+@@ -14,12 +14,24 @@ import org.springframework.web.bind.annotation.RequestMapping;
+ import org.springframework.web.bind.annotation.RequestParam;
+ import org.springframework.web.bind.annotation.RestController;
+ 
++/**
++ * Endpoints REST de usuarios: {@code /api/users} (registro público y consultas protegidas).
++ *
++ * <p>Capa Controller: solo traduce entre HTTP y Java. Lee la petición (ruta, parámetros, cuerpo JSON),
++ * delega TODO el trabajo en el servicio y devuelve un {@code ResponseEntity} con el código HTTP y el
++ * cuerpo. No contiene reglas de negocio ni habla con los repositorios.</p>
++ *
++ * <p>Anotaciones habituales: {@code @RestController} (cada método devuelve datos que Spring serializa
++ * a JSON), {@code @RequestMapping} (prefijo común de las rutas) y {@code @GetMapping} /
++ * {@code @PostMapping} / {@code @PatchMapping} (verbo HTTP + ruta). Los errores no se manejan aquí:
++ * las excepciones las traduce {@code GlobalExceptionHandler}.</p>
++ */
+ @RestController
+ @RequestMapping("/api/users")
+ public class UserController {
+ 
+-    private final UserService userService;
+-    private final AuthService authService;
++    private final UserService userService;   // consultas (por email o username)
++    private final AuthService authService;   // registro: además del usuario crea su credencial
+ 
+     public UserController(UserService userService, AuthService authService) {
+         this.userService = userService;
+@@ -27,6 +39,8 @@ public class UserController {
+     }
+ 
+     // POST /api/users  ->  201 Created
++    // Público (cualquiera puede registrarse). Se usa authService.register y no userService.register
++    // porque el registro completo incluye guardar la contraseña como hash BCrypt con el rol USER.
+     @PostMapping
+     public ResponseEntity<UserResponse> register(
+             @Valid @RequestBody RegisterUserRequest request) {
+@@ -39,6 +53,7 @@ public class UserController {
+     }
+ 
+     // GET /api/users/by-email?email=andrea@mail.com
++    // ADMIN, o el propio usuario (FR-SECUSR-02).
+     @GetMapping("/by-email")
+     public ResponseEntity<UserResponse> findByEmail(
+             @RequestParam String email) {
+@@ -47,6 +62,7 @@ public class UserController {
+     }
+ 
+     // GET /api/users/by-username?username=andrea
++    // ADMIN, o el propio usuario (FR-SECUSR-03).
+     @GetMapping("/by-username")
+     public ResponseEntity<UserResponse> findByUsername(
+             @RequestParam String username) {
+diff --git a/src/main/java/com/pulsepass/controller/VenueController.java b/src/main/java/com/pulsepass/controller/VenueController.java
+index 67e850e..3c70f09 100644
+--- a/src/main/java/com/pulsepass/controller/VenueController.java
++++ b/src/main/java/com/pulsepass/controller/VenueController.java
+@@ -10,17 +10,30 @@ import org.springframework.web.bind.annotation.RestController;
+ 
+ import java.util.List;
+ 
++/**
++ * Endpoints REST de recintos (venues), solo lectura y públicos: {@code /api/venues}.
++ *
++ * <p>Capa Controller: solo traduce entre HTTP y Java. Lee la petición (ruta, parámetros, cuerpo JSON),
++ * delega TODO el trabajo en el servicio y devuelve un {@code ResponseEntity} con el código HTTP y el
++ * cuerpo. No contiene reglas de negocio ni habla con los repositorios.</p>
++ *
++ * <p>Anotaciones habituales: {@code @RestController} (cada método devuelve datos que Spring serializa
++ * a JSON), {@code @RequestMapping} (prefijo común de las rutas) y {@code @GetMapping} /
++ * {@code @PostMapping} / {@code @PatchMapping} (verbo HTTP + ruta). Los errores no se manejan aquí:
++ * las excepciones las traduce {@code GlobalExceptionHandler}.</p>
++ */
+ @RestController
+ @RequestMapping("/api/venues")
+ public class VenueController {
+ 
+-    private final VenueService venueService;
++    private final VenueService venueService;   // inyectado por constructor
+ 
+     public VenueController(VenueService venueService) {
+         this.venueService = venueService;
+     }
+ 
+     // GET /api/venues/active
++    // Público. Lista los recintos activos.
+     // (Spring da prioridad a la ruta literal sobre /{code})
+     @GetMapping("/active")
+     public ResponseEntity<List<VenueResponse>> findActiveVenues() {
+@@ -29,6 +42,7 @@ public class VenueController {
+     }
+ 
+     // GET /api/venues/{code}
++    // Público. Busca un recinto por su código; si no existe, 404.
+     @GetMapping("/{code}")
+     public ResponseEntity<VenueResponse> findByCode(
+             @PathVariable String code) {
+diff --git a/src/main/java/com/pulsepass/dto/request/CreateEventRequest.java b/src/main/java/com/pulsepass/dto/request/CreateEventRequest.java
+index 21b23d6..2b6c195 100644
+--- a/src/main/java/com/pulsepass/dto/request/CreateEventRequest.java
++++ b/src/main/java/com/pulsepass/dto/request/CreateEventRequest.java
+@@ -8,6 +8,12 @@ import jakarta.validation.constraints.Size;
+ 
+ import java.time.LocalDate;
+ 
++/**
++ * DTO de ENTRADA: representa el JSON que el cliente envía. Es un {@code record} (inmutable, con constructor y accesores generados). Las anotaciones de Bean Validation ({@code @NotBlank}: no nulo ni vacío; {@code @NotNull}: no nulo; {@code @Size}: longitud; {@code @Email}: formato) se ejecutan cuando el controlador lo recibe con {@code @Valid}; si alguna falla, la respuesta es 400 con el detalle por campo en {@code details}. Son validaciones de FORMA: las reglas de negocio las valida el servicio.
++ *
++ * <p>Datos para crear un evento. No tiene campo de estado: todo evento nace como DRAFT (BR-EVENT-005).
++ * El recinto se indica por su código ({@code venueCode}), no por id.</p>
++ */
+ public record CreateEventRequest(
+ 
+         @NotBlank(message = "Event code is required")
+@@ -27,6 +33,7 @@ public record CreateEventRequest(
+         @NotNull(message = "Event date is required")
+         LocalDate eventDate,
+ 
++        // 0 = sin restricción de edad (ver BR-EVENT-006 y BR-TICKET-006).
+         @NotNull(message = "Minimum age is required")
+         @Min(value = 0, message = "Minimum age must be zero or greater")
+         Integer minimumAge,
+diff --git a/src/main/java/com/pulsepass/dto/request/LoginRequest.java b/src/main/java/com/pulsepass/dto/request/LoginRequest.java
+index df75b2d..2e3a5a8 100644
+--- a/src/main/java/com/pulsepass/dto/request/LoginRequest.java
++++ b/src/main/java/com/pulsepass/dto/request/LoginRequest.java
+@@ -3,6 +3,12 @@ package com.pulsepass.dto.request;
+ import jakarta.validation.constraints.NotBlank;
+ import jakarta.validation.constraints.Size;
+ 
++/**
++ * DTO de ENTRADA: representa el JSON que el cliente envía. Es un {@code record} (inmutable, con constructor y accesores generados). Las anotaciones de Bean Validation ({@code @NotBlank}: no nulo ni vacío; {@code @NotNull}: no nulo; {@code @Size}: longitud; {@code @Email}: formato) se ejecutan cuando el controlador lo recibe con {@code @Valid}; si alguna falla, la respuesta es 400 con el detalle por campo en {@code details}. Son validaciones de FORMA: las reglas de negocio las valida el servicio.
++ *
++ * <p>Credenciales de inicio de sesión. El {@code identifier} puede ser username o email.
++ * {@code toString} oculta la contraseña para que nunca aparezca en los logs.</p>
++ */
+ public record LoginRequest(
+ 
+         @NotBlank(message = "Identifier is required")
+@@ -14,6 +20,7 @@ public record LoginRequest(
+         String password
+ ) {
+ 
++    // Sobrescribe toString para enmascarar la contraseña si alguien imprime o registra el objeto.
+     @Override
+     public String toString() {
+         return "LoginRequest[identifier=" + identifier + ", password=***]";
+diff --git a/src/main/java/com/pulsepass/dto/request/PurchaseTicketRequest.java b/src/main/java/com/pulsepass/dto/request/PurchaseTicketRequest.java
+index 31a2da6..8a53b35 100644
+--- a/src/main/java/com/pulsepass/dto/request/PurchaseTicketRequest.java
++++ b/src/main/java/com/pulsepass/dto/request/PurchaseTicketRequest.java
+@@ -5,6 +5,13 @@ import jakarta.validation.constraints.Email;
+ import jakarta.validation.constraints.NotBlank;
+ import jakarta.validation.constraints.NotNull;
+ 
++/**
++ * DTO de ENTRADA: representa el JSON que el cliente envía. Es un {@code record} (inmutable, con constructor y accesores generados). Las anotaciones de Bean Validation ({@code @NotBlank}: no nulo ni vacío; {@code @NotNull}: no nulo; {@code @Size}: longitud; {@code @Email}: formato) se ejecutan cuando el controlador lo recibe con {@code @Valid}; si alguna falla, la respuesta es 400 con el detalle por campo en {@code details}. Son validaciones de FORMA: las reglas de negocio las valida el servicio.
++ *
++ * <p>Datos para comprar un ticket: quién (email), para qué evento (código) y de qué tipo.
++ * No incluye el precio: lo calcula el servidor a partir del tipo (ver {@code TicketPriceCalculator}), por lo que
++ * el cliente no puede elegir cuánto paga.</p>
++ */
+ public record PurchaseTicketRequest(
+ 
+         @NotBlank(message = "User email is required")
+diff --git a/src/main/java/com/pulsepass/dto/request/RegisterUserRequest.java b/src/main/java/com/pulsepass/dto/request/RegisterUserRequest.java
+index 4b0ffd5..18bd40b 100644
+--- a/src/main/java/com/pulsepass/dto/request/RegisterUserRequest.java
++++ b/src/main/java/com/pulsepass/dto/request/RegisterUserRequest.java
+@@ -10,6 +10,12 @@ import jakarta.validation.constraints.Size;
+ import java.nio.charset.StandardCharsets;
+ import java.time.LocalDate;
+ 
++/**
++ * DTO de ENTRADA: representa el JSON que el cliente envía. Es un {@code record} (inmutable, con constructor y accesores generados). Las anotaciones de Bean Validation ({@code @NotBlank}: no nulo ni vacío; {@code @NotNull}: no nulo; {@code @Size}: longitud; {@code @Email}: formato) se ejecutan cuando el controlador lo recibe con {@code @Valid}; si alguna falla, la respuesta es 400 con el detalle por campo en {@code details}. Son validaciones de FORMA: las reglas de negocio las valida el servicio.
++ *
++ * <p>Datos de registro de un usuario: cuenta (username, email, contraseña) y perfil
++ * (nombre, apellido, teléfono, ciudad, fecha de nacimiento). {@code toString} oculta la contraseña.</p>
++ */
+ public record RegisterUserRequest(
+ 
+         @NotBlank(message = "Username is required")
+@@ -39,17 +45,22 @@ public record RegisterUserRequest(
+         LocalDate birthDate,
+ 
+         @NotBlank(message = "Password is required")
++        // Mínimo 12 caracteres; el máximo de 72 existe porque BCrypt ignora lo que exceda de 72 bytes.
+         @Size(min = 12, max = 72, message = "Password must be between 12 and 72 characters")
+         String password
+ ) {
+ 
+         // BCrypt solo procesa 72 BYTES; @Size cuenta caracteres (un "ñ" son 2 bytes)
++        // @AssertTrue sobre un método isXxx() hace que Bean Validation lo evalúe como si fuera un campo más:
++        // si devuelve false, la petición falla con 400. @JsonIgnore evita que Jackson lo trate como una
++        // propiedad del JSON (no se lee ni se escribe).
+         @JsonIgnore
+         @AssertTrue(message = "Password must not exceed 72 bytes")
+         public boolean isPasswordWithinBcryptLimit() {
+                 return password == null || password.getBytes(StandardCharsets.UTF_8).length <= 72;
+         }
+ 
++        // Sobrescribe toString para enmascarar la contraseña si alguien imprime o registra el objeto.
+         @Override
+         public String toString() {
+                 return "RegisterUserRequest[username=" + username + ", email=" + email + ", password=***]";
+diff --git a/src/main/java/com/pulsepass/dto/response/ArtistResponse.java b/src/main/java/com/pulsepass/dto/response/ArtistResponse.java
+index 74cc419..16ec02a 100644
+--- a/src/main/java/com/pulsepass/dto/response/ArtistResponse.java
++++ b/src/main/java/com/pulsepass/dto/response/ArtistResponse.java
+@@ -1,5 +1,6 @@
+ package com.pulsepass.dto.response;
+ 
++/** DTO de SALIDA: es el JSON que se devuelve al cliente. Es un {@code record} inmutable. Se usa un DTO en lugar de devolver la entidad JPA para no exponer la estructura interna de la base de datos ni arrastrar relaciones LAZY al serializar. Se construye con MapStruct (paquete {@code mapper}). Datos públicos de un artista. */
+ public record ArtistResponse(
+         Long id,
+         String stageName,
+diff --git a/src/main/java/com/pulsepass/dto/response/AuthResponse.java b/src/main/java/com/pulsepass/dto/response/AuthResponse.java
+index e1c2977..a3830e7 100644
+--- a/src/main/java/com/pulsepass/dto/response/AuthResponse.java
++++ b/src/main/java/com/pulsepass/dto/response/AuthResponse.java
+@@ -1,11 +1,18 @@
+ package com.pulsepass.dto.response;
+ 
++/**
++ * DTO de SALIDA: es el JSON que se devuelve al cliente. Es un {@code record} inmutable. Se usa un DTO en lugar de devolver la entidad JPA para no exponer la estructura interna de la base de datos ni arrastrar relaciones LAZY al serializar. Se construye con MapStruct (paquete {@code mapper}).
++ *
++ * <p>Resultado del login: el token JWT, su tipo y cuántos segundos de vigencia tiene. El cliente
++ * debe enviar el token en la cabecera {@code Authorization: Bearer <token>}. {@code toString} oculta el token.</p>
++ */
+ public record AuthResponse(
+         String accessToken,
+         String tokenType,   // "Bearer"
+         long expiresIn      // segundos (900)
+ ) {
+ 
++    // Sobrescribe toString para enmascarar el token si alguien imprime o registra el objeto.
+     @Override
+     public String toString() {
+         return "AuthResponse[accessToken=***, tokenType=" + tokenType + ", expiresIn=" + expiresIn + "]";
+diff --git a/src/main/java/com/pulsepass/dto/response/AuthenticatedUserResponse.java b/src/main/java/com/pulsepass/dto/response/AuthenticatedUserResponse.java
+index bdcb343..d8ae266 100644
+--- a/src/main/java/com/pulsepass/dto/response/AuthenticatedUserResponse.java
++++ b/src/main/java/com/pulsepass/dto/response/AuthenticatedUserResponse.java
+@@ -2,6 +2,7 @@ package com.pulsepass.dto.response;
+ 
+ import java.util.List;
+ 
++/** DTO de SALIDA: es el JSON que se devuelve al cliente. Es un {@code record} inmutable. Se usa un DTO en lugar de devolver la entidad JPA para no exponer la estructura interna de la base de datos ni arrastrar relaciones LAZY al serializar. Se construye con MapStruct (paquete {@code mapper}). Respuesta de {@code GET /api/auth/me}: quién es el usuario autenticado y con qué roles. */
+ public record AuthenticatedUserResponse(
+         Long id,
+         String username,
+diff --git a/src/main/java/com/pulsepass/dto/response/ErrorResponse.java b/src/main/java/com/pulsepass/dto/response/ErrorResponse.java
+index dc2a378..c937731 100644
+--- a/src/main/java/com/pulsepass/dto/response/ErrorResponse.java
++++ b/src/main/java/com/pulsepass/dto/response/ErrorResponse.java
+@@ -3,6 +3,18 @@ package com.pulsepass.dto.response;
+ import java.time.LocalDateTime;
+ import java.util.Map;
+ 
++/**
++ * Estructura ÚNICA de todos los errores de la API (la arman {@code GlobalExceptionHandler} y
++ * {@code SecurityErrorWriter}), de modo que el cliente siempre los lee igual.
++ *
++ * <ul>
++ *   <li>{@code timestamp}: cuándo ocurrió.</li>
++ *   <li>{@code status}: código HTTP numérico (404, 409...).</li>
++ *   <li>{@code error}: frase estándar del código ("Not Found", "Conflict"...).</li>
++ *   <li>{@code message}: explicación para humanos.</li>
++ *   <li>{@code details}: mapa campo -> motivo (p. ej. errores de validación); vacío si no aplica.</li>
++ * </ul>
++ */
+ public record ErrorResponse(
+         LocalDateTime timestamp,
+         int status,
+diff --git a/src/main/java/com/pulsepass/dto/response/EventResponse.java b/src/main/java/com/pulsepass/dto/response/EventResponse.java
+index 4d22ec1..9deca6e 100644
+--- a/src/main/java/com/pulsepass/dto/response/EventResponse.java
++++ b/src/main/java/com/pulsepass/dto/response/EventResponse.java
+@@ -6,6 +6,12 @@ import com.pulsepass.domain.EventStatus;
+ import java.time.LocalDate;
+ import java.util.List;
+ 
++/**
++ * DTO de SALIDA: es el JSON que se devuelve al cliente. Es un {@code record} inmutable. Se usa un DTO en lugar de devolver la entidad JPA para no exponer la estructura interna de la base de datos ni arrastrar relaciones LAZY al serializar. Se construye con MapStruct (paquete {@code mapper}).
++ *
++ * <p>Detalle completo de un evento. Aplana datos del recinto ({@code venueCode}, {@code venueName})
++ * y trae la lista de artistas. Para listados se usa la versión corta {@link EventSummaryResponse}.</p>
++ */
+ public record EventResponse(
+         Long id,
+         String eventCode,
+diff --git a/src/main/java/com/pulsepass/dto/response/EventSummaryResponse.java b/src/main/java/com/pulsepass/dto/response/EventSummaryResponse.java
+index 31423aa..826957e 100644
+--- a/src/main/java/com/pulsepass/dto/response/EventSummaryResponse.java
++++ b/src/main/java/com/pulsepass/dto/response/EventSummaryResponse.java
+@@ -5,6 +5,7 @@ import com.pulsepass.domain.EventStatus;
+ 
+ import java.time.LocalDate;
+ 
++/** DTO de SALIDA: es el JSON que se devuelve al cliente. Es un {@code record} inmutable. Se usa un DTO en lugar de devolver la entidad JPA para no exponer la estructura interna de la base de datos ni arrastrar relaciones LAZY al serializar. Se construye con MapStruct (paquete {@code mapper}). Versión resumida de un evento para listados: sin descripción, edad mínima ni artistas. */
+ public record EventSummaryResponse(
+         Long id,
+         String eventCode,
+diff --git a/src/main/java/com/pulsepass/dto/response/TicketResponse.java b/src/main/java/com/pulsepass/dto/response/TicketResponse.java
+index 3132990..71d4a21 100644
+--- a/src/main/java/com/pulsepass/dto/response/TicketResponse.java
++++ b/src/main/java/com/pulsepass/dto/response/TicketResponse.java
+@@ -6,6 +6,13 @@ import com.pulsepass.domain.TicketType;
+ import java.math.BigDecimal;
+ import java.time.LocalDateTime;
+ 
++/**
++ * DTO de SALIDA: es el JSON que se devuelve al cliente. Es un {@code record} inmutable. Se usa un DTO en lugar de devolver la entidad JPA para no exponer la estructura interna de la base de datos ni arrastrar relaciones LAZY al serializar. Se construye con MapStruct (paquete {@code mapper}).
++ *
++ * <p>Datos de un ticket. Aplana información de las relaciones: el email del usuario
++ * ({@code userEmail}) y el código y nombre del evento ({@code eventCode}, {@code eventName}).
++ * El precio es un {@code BigDecimal} (dinero exacto, sin errores de coma flotante).</p>
++ */
+ public record TicketResponse(
+         Long id,
+         String ticketCode,
+diff --git a/src/main/java/com/pulsepass/dto/response/UserResponse.java b/src/main/java/com/pulsepass/dto/response/UserResponse.java
+index 958011a..23723d4 100644
+--- a/src/main/java/com/pulsepass/dto/response/UserResponse.java
++++ b/src/main/java/com/pulsepass/dto/response/UserResponse.java
+@@ -2,6 +2,12 @@ package com.pulsepass.dto.response;
+ 
+ import java.time.LocalDate;
+ 
++/**
++ * DTO de SALIDA: es el JSON que se devuelve al cliente. Es un {@code record} inmutable. Se usa un DTO en lugar de devolver la entidad JPA para no exponer la estructura interna de la base de datos ni arrastrar relaciones LAZY al serializar. Se construye con MapStruct (paquete {@code mapper}).
++ *
++ * <p>Datos de un usuario con los de su perfil aplanados. NO incluye contraseña ni hash: esos viven en
++ * otra entidad ({@code UserCredential}) que nunca se expone.</p>
++ */
+ public record UserResponse(
+         Long id,
+         String username,
+diff --git a/src/main/java/com/pulsepass/dto/response/VenueResponse.java b/src/main/java/com/pulsepass/dto/response/VenueResponse.java
+index 5d6ead9..52131af 100644
+--- a/src/main/java/com/pulsepass/dto/response/VenueResponse.java
++++ b/src/main/java/com/pulsepass/dto/response/VenueResponse.java
+@@ -1,5 +1,6 @@
+ package com.pulsepass.dto.response;
+ 
++/** DTO de SALIDA: es el JSON que se devuelve al cliente. Es un {@code record} inmutable. Se usa un DTO en lugar de devolver la entidad JPA para no exponer la estructura interna de la base de datos ni arrastrar relaciones LAZY al serializar. Se construye con MapStruct (paquete {@code mapper}). Datos de un recinto (incluida su capacidad máxima de asistentes). */
+ public record VenueResponse(
+         Long id,
+         String code,
+diff --git a/src/main/java/com/pulsepass/exception/BusinessRuleException.java b/src/main/java/com/pulsepass/exception/BusinessRuleException.java
+index 4ac4b46..5e947de 100644
+--- a/src/main/java/com/pulsepass/exception/BusinessRuleException.java
++++ b/src/main/java/com/pulsepass/exception/BusinessRuleException.java
+@@ -1,5 +1,11 @@
+ package com.pulsepass.exception;
+ 
++/**
++ * Se lanza cuando una operación viola una regla de negocio (los códigos BR-* de los servicios):
++ * evento no publicado, edad insuficiente, cupo agotado, ticket que no se puede cancelar, etc.
++ * {@code GlobalExceptionHandler} la convierte en una respuesta <b>409 Conflict</b>; el mensaje explica
++ * qué regla falló. Es no verificada ({@code RuntimeException}): provoca rollback de la transacción.
++ */
+ public class BusinessRuleException extends RuntimeException {
+ 
+     public BusinessRuleException(String message) {
+diff --git a/src/main/java/com/pulsepass/exception/DuplicateResourceException.java b/src/main/java/com/pulsepass/exception/DuplicateResourceException.java
+index be42a8e..7a4e12a 100644
+--- a/src/main/java/com/pulsepass/exception/DuplicateResourceException.java
++++ b/src/main/java/com/pulsepass/exception/DuplicateResourceException.java
+@@ -1,5 +1,10 @@
+ package com.pulsepass.exception;
+ 
++/**
++ * Se lanza cuando se intenta crear algo que debe ser único y ya existe (username, email, eventCode).
++ * {@code GlobalExceptionHandler} la convierte en una respuesta <b>409 Conflict</b>.
++ * Es no verificada ({@code RuntimeException}): provoca rollback de la transacción.
++ */
+ public class DuplicateResourceException extends RuntimeException {
+ 
+     public DuplicateResourceException(String message) {
+diff --git a/src/main/java/com/pulsepass/exception/GlobalExceptionHandler.java b/src/main/java/com/pulsepass/exception/GlobalExceptionHandler.java
+index ddb71a4..ee699d0 100644
+--- a/src/main/java/com/pulsepass/exception/GlobalExceptionHandler.java
++++ b/src/main/java/com/pulsepass/exception/GlobalExceptionHandler.java
+@@ -23,9 +23,31 @@ import java.util.Map;
+ import java.util.Objects;
+ import java.util.stream.Collectors;
+ 
++/**
++ * Traductor central de excepciones a respuestas HTTP. Convierte cada excepción en un
++ * {@link ErrorResponse} con la misma estructura, de modo que ningún controlador necesita
++ * {@code try/catch}.
++ *
++ * <p>{@code @RestControllerAdvice} hace que estos métodos apliquen a TODOS los controladores. Cuando
++ * se lanza una excepción, Spring elige el {@code @ExceptionHandler} cuyo tipo sea el más específico
++ * para esa excepción; el orden en el archivo no importa, y por eso {@code Exception.class} funciona
++ * como red de seguridad final.</p>
++ *
++ * <p>Resumen de códigos:</p>
++ * <ul>
++ *   <li>400: validación fallida, JSON ilegible, parámetro faltante o de tipo incorrecto.</li>
++ *   <li>401: autenticación requerida o credenciales inválidas. 403: sin permiso.</li>
++ *   <li>404: recurso inexistente o ruta inexistente. 405: verbo no soportado. 415: Content-Type no soportado.</li>
++ *   <li>409: recurso duplicado o regla de negocio violada.</li>
++ *   <li>500: cualquier error inesperado (el detalle solo se registra en el log, nunca se envía al cliente).</li>
++ * </ul>
++ * <p>Los errores 401/403 que ocurren en los filtros (antes de llegar a un controlador) no pasan por aquí:
++ * los resuelven {@code RestAuthenticationEntryPoint} y {@code RestAccessDeniedHandler}.</p>
++ */
+ @RestControllerAdvice
+ public class GlobalExceptionHandler {
+ 
++    // Logger SLF4J: solo se usa para errores inesperados (500) y accesos denegados.
+     private static final Logger log =
+             LoggerFactory.getLogger(GlobalExceptionHandler.class);
+ 
+@@ -58,6 +80,7 @@ public class GlobalExceptionHandler {
+     public ResponseEntity<ErrorResponse> handleValidation(
+             MethodArgumentNotValidException ex) {
+ 
++        // Arma un mapa campo -> mensaje con cada error de validación (p. ej. "email" -> "Email format is invalid").
+         Map<String, String> details = ex.getBindingResult()
+                 .getFieldErrors()
+                 .stream()
+@@ -71,6 +94,7 @@ public class GlobalExceptionHandler {
+     }
+ 
+     // 400: JSON mal formado, fecha inválida o enum inválido en el body -
++    // El mensaje es fijo y genérico: no se devuelve el texto interno del parser de JSON.
+     @ExceptionHandler(HttpMessageNotReadableException.class)
+     public ResponseEntity<ErrorResponse> handleMessageNotReadable(
+             HttpMessageNotReadableException ex) {
+@@ -119,6 +143,7 @@ public class GlobalExceptionHandler {
+     public ResponseEntity<ErrorResponse> handleMethodNotSupported(
+             HttpRequestMethodNotSupportedException ex) {
+ 
++        // Aquí no se usa build() porque además hay que reenviar cabeceras (Allow) en la respuesta.
+         ErrorResponse body = new ErrorResponse(
+                 LocalDateTime.now(),
+                 HttpStatus.METHOD_NOT_ALLOWED.value(),
+@@ -145,6 +170,7 @@ public class GlobalExceptionHandler {
+     public ResponseEntity<ErrorResponse> handleUnexpectedException(Exception ex) {
+ 
+         // El detalle va al log del servidor, NUNCA al cliente.
++        // (Un mensaje de excepción interno podría revelar rutas, SQL o datos sensibles.)
+         log.error("Unexpected error", ex);
+ 
+         return build(
+@@ -169,6 +195,7 @@ public class GlobalExceptionHandler {
+     }
+ 
+     // 403: @PreAuthorize denegó (incluye AuthorizationDeniedException) -----
++    // El orden de los métodos no afecta: Spring elige el handler más específico para cada excepción.
+     @ExceptionHandler(AccessDeniedException.class)
+     public ResponseEntity<ErrorResponse> handleAccessDenied(AccessDeniedException ex) {
+ 
+diff --git a/src/main/java/com/pulsepass/exception/ResourceNotFoundException.java b/src/main/java/com/pulsepass/exception/ResourceNotFoundException.java
+index 6b96608..833fe0c 100644
+--- a/src/main/java/com/pulsepass/exception/ResourceNotFoundException.java
++++ b/src/main/java/com/pulsepass/exception/ResourceNotFoundException.java
+@@ -1,5 +1,12 @@
+ package com.pulsepass.exception;
+ 
++/**
++ * Se lanza cuando un recurso buscado no existe (usuario, evento, ticket, artista, recinto...).
++ * {@code GlobalExceptionHandler} la convierte en una respuesta <b>404 Not Found</b>.
++ *
++ * <p>Extiende {@code RuntimeException} (no verificada): no obliga a declarar {@code throws} y, por
++ * defecto, Spring revierte la transacción ({@code @Transactional}) cuando se lanza.</p>
++ */
+ public class ResourceNotFoundException extends RuntimeException {
+ 
+     public ResourceNotFoundException(String message) {
+diff --git a/src/main/java/com/pulsepass/mapper/ArtistMapper.java b/src/main/java/com/pulsepass/mapper/ArtistMapper.java
+index 106b002..9ace0d6 100644
+--- a/src/main/java/com/pulsepass/mapper/ArtistMapper.java
++++ b/src/main/java/com/pulsepass/mapper/ArtistMapper.java
+@@ -4,6 +4,11 @@ import com.pulsepass.domain.Artist;
+ import com.pulsepass.dto.response.ArtistResponse;
+ import org.mapstruct.Mapper;
+ 
++/**
++ * Mapper de MapStruct: convierte entidades JPA en DTOs de respuesta. Es solo una INTERFAZ: durante la compilación MapStruct (procesador de anotaciones configurado en el pom.xml) genera la clase que la implementa, {@code componentModel = "spring"} la registra como bean para poder inyectarla. Los campos con el mismo nombre se copian solos; {@code @Mapping} cubre los casos con nombre o ruta distinta. Se invoca desde los servicios, dentro de la transacción: los mappers que recorren relaciones LAZY (Event y Ticket) lo necesitan, ya que {@code spring.jpa.open-in-view=false}.
++ *
++ * <p>Artist -> ArtistResponse. Todos los campos coinciden por nombre, por lo que no necesita {@code @Mapping}.</p>
++ */
+ @Mapper(componentModel = "spring")
+ public interface ArtistMapper {
+ 
+diff --git a/src/main/java/com/pulsepass/mapper/EventMapper.java b/src/main/java/com/pulsepass/mapper/EventMapper.java
+index fbfa9d5..b722c32 100644
+--- a/src/main/java/com/pulsepass/mapper/EventMapper.java
++++ b/src/main/java/com/pulsepass/mapper/EventMapper.java
+@@ -6,13 +6,21 @@ import com.pulsepass.dto.response.EventSummaryResponse;
+ import org.mapstruct.Mapper;
+ import org.mapstruct.Mapping;
+ 
++/**
++ * Mapper de MapStruct: convierte entidades JPA en DTOs de respuesta. Es solo una INTERFAZ: durante la compilación MapStruct (procesador de anotaciones configurado en el pom.xml) genera la clase que la implementa, {@code componentModel = "spring"} la registra como bean para poder inyectarla. Los campos con el mismo nombre se copian solos; {@code @Mapping} cubre los casos con nombre o ruta distinta. Se invoca desde los servicios, dentro de la transacción: los mappers que recorren relaciones LAZY (Event y Ticket) lo necesitan, ya que {@code spring.jpa.open-in-view=false}.
++ *
++ * <p>Event -> EventResponse (detalle) y EventSummaryResponse (resumen). {@code uses = ArtistMapper.class}
++ * le indica que, al convertir la colección de artistas del evento, delegue cada elemento en {@code ArtistMapper}.</p>
++ */
+ @Mapper(componentModel = "spring", uses = ArtistMapper.class)
+ public interface EventMapper {
+ 
++    // Aplana el recinto: el destino venueCode/venueName se llena con event.getVenue().getCode()/getName().
+     @Mapping(target = "venueCode", source = "venue.code")
+     @Mapping(target = "venueName", source = "venue.name")
+     EventResponse toResponse(Event event);
+ 
+     @Mapping(target = "venueName", source = "venue.name")
++    // Versión resumida: el resto de campos (id, eventCode, name, category, status, eventDate) coinciden por nombre.
+     EventSummaryResponse toSummary(Event event);
+ }
+diff --git a/src/main/java/com/pulsepass/mapper/TicketMapper.java b/src/main/java/com/pulsepass/mapper/TicketMapper.java
+index 0cafe45..86d12e5 100644
+--- a/src/main/java/com/pulsepass/mapper/TicketMapper.java
++++ b/src/main/java/com/pulsepass/mapper/TicketMapper.java
+@@ -5,9 +5,15 @@ import com.pulsepass.dto.response.TicketResponse;
+ import org.mapstruct.Mapper;
+ import org.mapstruct.Mapping;
+ 
++/**
++ * Mapper de MapStruct: convierte entidades JPA en DTOs de respuesta. Es solo una INTERFAZ: durante la compilación MapStruct (procesador de anotaciones configurado en el pom.xml) genera la clase que la implementa, {@code componentModel = "spring"} la registra como bean para poder inyectarla. Los campos con el mismo nombre se copian solos; {@code @Mapping} cubre los casos con nombre o ruta distinta. Se invoca desde los servicios, dentro de la transacción: los mappers que recorren relaciones LAZY (Event y Ticket) lo necesitan, ya que {@code spring.jpa.open-in-view=false}.
++ *
++ * <p>Ticket -> TicketResponse: aplana el usuario y el evento relacionados.</p>
++ */
+ @Mapper(componentModel = "spring")
+ public interface TicketMapper {
+ 
++    // Los datos del usuario y del evento viven en entidades relacionadas; "source" indica la ruta para llegar a ellos.
+     @Mapping(target = "userEmail", source = "user.email")
+     @Mapping(target = "eventCode", source = "event.eventCode")
+     @Mapping(target = "eventName", source = "event.name")
+diff --git a/src/main/java/com/pulsepass/mapper/UserMapper.java b/src/main/java/com/pulsepass/mapper/UserMapper.java
+index 2af514b..c1509f4 100644
+--- a/src/main/java/com/pulsepass/mapper/UserMapper.java
++++ b/src/main/java/com/pulsepass/mapper/UserMapper.java
+@@ -5,9 +5,16 @@ import com.pulsepass.dto.response.UserResponse;
+ import org.mapstruct.Mapper;
+ import org.mapstruct.Mapping;
+ 
++/**
++ * Mapper de MapStruct: convierte entidades JPA en DTOs de respuesta. Es solo una INTERFAZ: durante la compilación MapStruct (procesador de anotaciones configurado en el pom.xml) genera la clase que la implementa, {@code componentModel = "spring"} la registra como bean para poder inyectarla. Los campos con el mismo nombre se copian solos; {@code @Mapping} cubre los casos con nombre o ruta distinta. Se invoca desde los servicios, dentro de la transacción: los mappers que recorren relaciones LAZY (Event y Ticket) lo necesitan, ya que {@code spring.jpa.open-in-view=false}.
++ *
++ * <p>User -> UserResponse: aplana los datos del perfil (UserProfile) dentro de la respuesta.
++ * La respuesta no tiene contraseña: esa información no está en {@code User}.</p>
++ */
+ @Mapper(componentModel = "spring")
+ public interface UserMapper {
+ 
++    // Los datos personales están en user.getProfile(); se copian al nivel superior de la respuesta.
+     @Mapping(target = "firstName", source = "profile.firstName")
+     @Mapping(target = "lastName", source = "profile.lastName")
+     @Mapping(target = "phone", source = "profile.phone")
+diff --git a/src/main/java/com/pulsepass/mapper/VenueMapper.java b/src/main/java/com/pulsepass/mapper/VenueMapper.java
+index 503fae8..c144dc1 100644
+--- a/src/main/java/com/pulsepass/mapper/VenueMapper.java
++++ b/src/main/java/com/pulsepass/mapper/VenueMapper.java
+@@ -4,6 +4,11 @@ import com.pulsepass.domain.Venue;
+ import com.pulsepass.dto.response.VenueResponse;
+ import org.mapstruct.Mapper;
+ 
++/**
++ * Mapper de MapStruct: convierte entidades JPA en DTOs de respuesta. Es solo una INTERFAZ: durante la compilación MapStruct (procesador de anotaciones configurado en el pom.xml) genera la clase que la implementa, {@code componentModel = "spring"} la registra como bean para poder inyectarla. Los campos con el mismo nombre se copian solos; {@code @Mapping} cubre los casos con nombre o ruta distinta. Se invoca desde los servicios, dentro de la transacción: los mappers que recorren relaciones LAZY (Event y Ticket) lo necesitan, ya que {@code spring.jpa.open-in-view=false}.
++ *
++ * <p>Venue -> VenueResponse. Todos los campos coinciden por nombre, por lo que no necesita {@code @Mapping}.</p>
++ */
+ @Mapper(componentModel = "spring")
+ public interface VenueMapper {
+ 
+-- 
+2.43.0
+

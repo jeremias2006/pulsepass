@@ -8,6 +8,12 @@ import jakarta.validation.constraints.Size;
 
 import java.time.LocalDate;
 
+/**
+ * DTO de ENTRADA: representa el JSON que el cliente envía. Es un {@code record} (inmutable, con constructor y accesores generados). Las anotaciones de Bean Validation ({@code @NotBlank}: no nulo ni vacío; {@code @NotNull}: no nulo; {@code @Size}: longitud; {@code @Email}: formato) se ejecutan cuando el controlador lo recibe con {@code @Valid}; si alguna falla, la respuesta es 400 con el detalle por campo en {@code details}. Son validaciones de FORMA: las reglas de negocio las valida el servicio.
+ *
+ * <p>Datos para crear un evento. No tiene campo de estado: todo evento nace como DRAFT (BR-EVENT-005).
+ * El recinto se indica por su código ({@code venueCode}), no por id.</p>
+ */
 public record CreateEventRequest(
 
         @NotBlank(message = "Event code is required")
@@ -27,6 +33,7 @@ public record CreateEventRequest(
         @NotNull(message = "Event date is required")
         LocalDate eventDate,
 
+        // 0 = sin restricción de edad (ver BR-EVENT-006 y BR-TICKET-006).
         @NotNull(message = "Minimum age is required")
         @Min(value = 0, message = "Minimum age must be zero or greater")
         Integer minimumAge,
