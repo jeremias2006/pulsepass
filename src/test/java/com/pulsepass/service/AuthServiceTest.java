@@ -47,6 +47,13 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+/**
+ * Prueba unitaria de AuthService (registro e inicio de sesión) con Mockito.
+ *
+ * Detalles de diseño de la prueba: el codificador de contraseñas es un BCrypt REAL (no un doble), para poder comprobar que se
+ * guarda un hash verdadero; y el Clock es FIJO (2026-10-19 12:00 UTC), de modo que la fecha de cambio de contraseña es
+ * predecible. El AuthService se construye a mano en {@code setUp} porque mezcla dobles y objetos reales.
+ */
 @ExtendWith(MockitoExtension.class)
 class AuthServiceTest {
 
@@ -77,6 +84,8 @@ class AuthServiceTest {
 
     // ---------------------------------------------------------------- register
 
+    // Comprueba lo que se guarda en la credencial: el hash no es la contraseña pero sí corresponde a ella (matches), el único
+    // rol es USER, la fecha de cambio es la del reloj fijo y queda enlazada al mismo User.
     @Test
     void register_savesBcryptHashAndOnlyUserRole() {
         // ARRANGE
@@ -100,6 +109,8 @@ class AuthServiceTest {
         assertThat(result.id()).isEqualTo(1L);
     }
 
+    // Si falla el guardado de la credencial, la excepción se propaga (no se traga). Este test con mocks solo prueba la
+    // propagación; que la transacción realmente revierta el usuario se prueba aparte en RegistrationAtomicityIntegrationTest.
     @Test
     void register_whenCredentialSaveFails_propagatesException() {
         // ARRANGE
@@ -114,6 +125,7 @@ class AuthServiceTest {
                 .hasMessage("db down");
     }
 
+    // Caso defensivo: si el usuario recién creado no se puede recargar, se lanza IllegalStateException y nunca se guarda la credencial.
     @Test
     void register_whenUserNotFoundAfterCreation_throwsAndNeverSavesCredential() {
         // ARRANGE
@@ -128,6 +140,7 @@ class AuthServiceTest {
 
     // ------------------------------------------------------------------- login
 
+    // Caso feliz: devuelve el token, el tipo "Bearer" y 900 segundos (15 minutos) de vigencia.
     @Test
     void login_success_returnsBearerTokenWith900Seconds() {
         // ARRANGE
@@ -147,6 +160,7 @@ class AuthServiceTest {
         assertThat(result.expiresIn()).isEqualTo(900L);
     }
 
+    // El identificador se recorta (trim) antes de autenticar: "  andrea  " llega al AuthenticationManager como "andrea".
     @Test
     void login_trimsIdentifierBeforeAuthenticating() {
         // ARRANGE
@@ -167,6 +181,8 @@ class AuthServiceTest {
     }
 
     // Contraseña mala, cuenta inactiva o usuario inexistente: SIEMPRE el mismo error genérico
+    // @ParameterizedTest ejecuta esta prueba una vez por cada caso de authenticationFailures(). Sea cual sea el motivo (contraseña mala,
+    // cuenta inactiva o usuario inexistente), el error es siempre el mismo y no se emite ningún token (verifyNoInteractions(jwtService)).
     @ParameterizedTest
     @MethodSource("authenticationFailures")
     void login_anyAuthenticationFailure_throwsGenericBadCredentialsAndNeverIssuesToken(
@@ -181,6 +197,7 @@ class AuthServiceTest {
         verifyNoInteractions(jwtService);
     }
 
+    // Proveedor de casos para el test parametrizado: los tres tipos de fallo de autenticación que debe tratar igual.
     static Stream<AuthenticationException> authenticationFailures() {
         return Stream.of(
                 new BadCredentialsException("bad"),

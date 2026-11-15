@@ -24,6 +24,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+/**
+ * Prueba unitaria de AuthorizationServiceImpl (las reglas "¿es el propietario?" y "¿tiene este rol?").
+ *
+ * No hay HTTP ni JWT: cada prueba simula una petición autenticada colocando un SecurityPrincipal en el SecurityContextHolder
+ * (ver {@code authenticateAs}). Los repositorios son dobles de Mockito. {@code verifyNoInteractions(repo)} comprueba que, ante
+ * una entrada nula o sin autenticación, el servicio responde false SIN consultar la base.
+ */
 @ExtendWith(MockitoExtension.class)
 class AuthorizationServiceImplTest {
 
@@ -43,6 +50,7 @@ class AuthorizationServiceImplTest {
 
     // ------------------------------------------------------------ isSelfByEmail
 
+    // El email pertenece al usuario autenticado (mismo id): true.
     @Test
     void isSelfByEmail_sameUser_returnsTrue() {
         authenticateAs(7L, "ROLE_USER");
@@ -52,6 +60,7 @@ class AuthorizationServiceImplTest {
         assertThat(authorizationService.isSelfByEmail("andrea@mail.com")).isTrue();
     }
 
+    // El email es de otro usuario (id distinto): false.
     @Test
     void isSelfByEmail_otherUser_returnsFalse() {
         authenticateAs(7L, "ROLE_USER");
@@ -61,6 +70,7 @@ class AuthorizationServiceImplTest {
         assertThat(authorizationService.isSelfByEmail("carlos@mail.com")).isFalse();
     }
 
+    // El email no existe: false (no se distingue de "es de otro", para no revelar si existe).
     @Test
     void isSelfByEmail_unknownEmail_returnsFalse() {
         authenticateAs(7L, "ROLE_USER");
@@ -69,6 +79,7 @@ class AuthorizationServiceImplTest {
         assertThat(authorizationService.isSelfByEmail("nadie@mail.com")).isFalse();
     }
 
+    // Nadie autenticado: false aunque el usuario exista.
     @Test
     void isSelfByEmail_withoutAuthentication_returnsFalse() {
         when(userRepository.findByEmailIgnoreCase("andrea@mail.com"))
@@ -77,6 +88,7 @@ class AuthorizationServiceImplTest {
         assertThat(authorizationService.isSelfByEmail("andrea@mail.com")).isFalse();
     }
 
+    // Email nulo: false y sin consultar el repositorio.
     @Test
     void isSelfByEmail_nullEmail_returnsFalseWithoutTouchingRepository() {
         authenticateAs(7L, "ROLE_USER");
@@ -87,6 +99,7 @@ class AuthorizationServiceImplTest {
 
     // --------------------------------------------------------- isSelfByUsername
 
+    // Igual que isSelfByEmail, pero buscando por username: es el propio usuario.
     @Test
     void isSelfByUsername_sameUser_returnsTrue() {
         authenticateAs(7L, "ROLE_USER");
@@ -95,6 +108,7 @@ class AuthorizationServiceImplTest {
         assertThat(authorizationService.isSelfByUsername("andrea")).isTrue();
     }
 
+    // Por username: es otro usuario.
     @Test
     void isSelfByUsername_otherUser_returnsFalse() {
         authenticateAs(7L, "ROLE_USER");
@@ -105,6 +119,7 @@ class AuthorizationServiceImplTest {
 
     // ------------------------------------------------------------ isTicketOwner
 
+    // El repositorio confirma que el ticket es del usuario autenticado: true.
     @Test
     void isTicketOwner_owner_returnsTrue() {
         authenticateAs(7L, "ROLE_USER");
@@ -113,6 +128,7 @@ class AuthorizationServiceImplTest {
         assertThat(authorizationService.isTicketOwner("TKT-A1B2C3D4")).isTrue();
     }
 
+    // El ticket es de otra persona: false.
     @Test
     void isTicketOwner_thirdParty_returnsFalse() {
         authenticateAs(7L, "ROLE_USER");
@@ -121,12 +137,14 @@ class AuthorizationServiceImplTest {
         assertThat(authorizationService.isTicketOwner("TKT-DE-CARLOS")).isFalse();
     }
 
+    // Sin autenticación: false y sin consultar el repositorio.
     @Test
     void isTicketOwner_withoutAuthentication_returnsFalseWithoutTouchingRepository() {
         assertThat(authorizationService.isTicketOwner("TKT-A1B2C3D4")).isFalse();
         verifyNoInteractions(ticketRepository);
     }
 
+    // Código de ticket nulo: false y sin consultar el repositorio.
     @Test
     void isTicketOwner_nullCode_returnsFalse() {
         authenticateAs(7L, "ROLE_USER");
@@ -137,6 +155,7 @@ class AuthorizationServiceImplTest {
 
     // ------------------------------------------------ isAdmin / isStaffOrAdmin
 
+    // Un USER no es ADMIN ni STAFF.
     @Test
     void roles_user_isNeitherAdminNorStaff() {
         authenticateAs(7L, "ROLE_USER");
@@ -145,6 +164,7 @@ class AuthorizationServiceImplTest {
         assertThat(authorizationService.isStaffOrAdmin()).isFalse();
     }
 
+    // Un STAFF cuenta como "staff o admin", pero no como ADMIN.
     @Test
     void roles_staff_isStaffOrAdminButNotAdmin() {
         authenticateAs(7L, "ROLE_STAFF");
@@ -153,6 +173,7 @@ class AuthorizationServiceImplTest {
         assertThat(authorizationService.isStaffOrAdmin()).isTrue();
     }
 
+    // Un ADMIN es ADMIN y también cuenta como "staff o admin".
     @Test
     void roles_admin_isBoth() {
         authenticateAs(7L, "ROLE_ADMIN");
@@ -161,6 +182,7 @@ class AuthorizationServiceImplTest {
         assertThat(authorizationService.isStaffOrAdmin()).isTrue();
     }
 
+    // Sin autenticación no se tiene ningún rol.
     @Test
     void roles_withoutAuthentication_isNeither() {
         assertThat(authorizationService.isAdmin()).isFalse();
@@ -169,6 +191,7 @@ class AuthorizationServiceImplTest {
 
     // -------------------------------------------------------- currentPrincipal
 
+    // Cubre al usuario anónimo de Spring, cuyo principal es el texto "anonymousUser" (no un SecurityPrincipal): resultado vacío.
     @Test
     void currentPrincipal_nonSecurityPrincipal_returnsEmpty() {
         // Una identidad que no es SecurityPrincipal (p. ej. un String) no se acepta
@@ -181,6 +204,7 @@ class AuthorizationServiceImplTest {
 
     // ----------------------------------------------------------------- helpers
 
+    // Simula una petición autenticada: crea un SecurityPrincipal con el id y los roles dados y lo deja en el SecurityContext.
     private void authenticateAs(Long userId, String... authorities) {
         List<SimpleGrantedAuthority> granted = Arrays.stream(authorities)
                 .map(SimpleGrantedAuthority::new)
@@ -192,6 +216,7 @@ class AuthorizationServiceImplTest {
                         principal, null, principal.getAuthorities()));
     }
 
+    // Crea un User con el id indicado. El id lo asigna JPA al persistir; en una prueba unitaria se fija por reflexión.
     private User user(Long id) {
         User user = new User("usuario", "usuario@mail.com");
         ReflectionTestUtils.setField(user, "id", id);
