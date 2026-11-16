@@ -24,6 +24,10 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/**
+ * Prueba unitaria de CustomUserDetailsService con Mockito: cómo se cargan los usuarios para Spring Security, tanto en el login
+ * (por email o username) como en cada petición con token (por id).
+ */
 @ExtendWith(MockitoExtension.class)
 class CustomUserDetailsServiceTest {
 
@@ -35,6 +39,7 @@ class CustomUserDetailsServiceTest {
 
     // ------------------------------------------------------- loadUserByUsername
 
+    // Si el identificador contiene "@" se busca por email (y nunca por username: verify never).
     @Test
     void loadUserByUsername_withAtSign_looksUpByEmail() {
         // ARRANGE
@@ -51,6 +56,7 @@ class CustomUserDetailsServiceTest {
         verify(credentialRepository, never()).findByUserUsername("andrea@mail.com");
     }
 
+    // Sin "@" se busca por username (y nunca por email).
     @Test
     void loadUserByUsername_withoutAtSign_looksUpByUsername() {
         // ARRANGE
@@ -65,6 +71,7 @@ class CustomUserDetailsServiceTest {
         verify(credentialRepository, never()).findByUserEmailIgnoreCase("andrea");
     }
 
+    // Username inexistente -> UsernameNotFoundException.
     @Test
     void loadUserByUsername_unknownUsername_throwsUsernameNotFound() {
         // ARRANGE
@@ -75,6 +82,7 @@ class CustomUserDetailsServiceTest {
                 .isInstanceOf(UsernameNotFoundException.class);
     }
 
+    // Email inexistente -> UsernameNotFoundException.
     @Test
     void loadUserByUsername_unknownEmail_throwsUsernameNotFound() {
         // ARRANGE
@@ -88,6 +96,7 @@ class CustomUserDetailsServiceTest {
 
     // --------------------------------------------------------- estado y roles
 
+    // SEC011: la cuenta desactivada produce un principal con isEnabled() = false, y por eso pierde el acceso.
     @Test
     void principal_ofInactiveUser_isNotEnabled() {
         // ARRANGE
@@ -103,6 +112,7 @@ class CustomUserDetailsServiceTest {
         assertThat(principal.isEnabled()).isFalse();
     }
 
+    // Una cuenta activa produce un principal habilitado.
     @Test
     void principal_ofActiveUser_isEnabled() {
         // ARRANGE
@@ -113,6 +123,7 @@ class CustomUserDetailsServiceTest {
         assertThat(service.loadUserByUsername("andrea").isEnabled()).isTrue();
     }
 
+    // Cada rol del dominio se convierte en una autoridad con prefijo ROLE_ (USER -> ROLE_USER, STAFF -> ROLE_STAFF).
     @Test
     void principal_rolesBecomeRoleAuthorities() {
         // ARRANGE
@@ -131,6 +142,7 @@ class CustomUserDetailsServiceTest {
 
     // -------------------------------------------------------------- loadUserById
 
+    // Carga por id (la usa el filtro JWT): devuelve el principal con los roles actuales de la base.
     @Test
     void loadUserById_existingUser_returnsPrincipalWithCurrentRoles() {
         // ARRANGE
@@ -147,6 +159,7 @@ class CustomUserDetailsServiceTest {
                 .containsExactly("ROLE_ADMIN");
     }
 
+    // Un id inexistente (p. ej. token de un usuario borrado) -> UsernameNotFoundException.
     @Test
     void loadUserById_unknownUser_throwsUsernameNotFound() {
         // ARRANGE
@@ -160,12 +173,14 @@ class CustomUserDetailsServiceTest {
     // ----------------------------------------------------------------- helpers
 
     // El id lo asigna JPA al persistir; en un test unitario lo fijamos por reflexión
+    // Crea un User con el id indicado (JPA lo asigna al persistir; aquí se fija por reflexión).
     private User user(Long id) {
         User user = new User("andrea", "andrea@mail.com");
         ReflectionTestUtils.setField(user, "id", id);
         return user;
     }
 
+    // Crea una credencial con hash simulado y los roles dados.
     private UserCredential credential(User user, Set<Role> roles) {
         return new UserCredential(user, "hash-bcrypt", roles, LocalDateTime.of(2026, 10, 19, 12, 0));
     }

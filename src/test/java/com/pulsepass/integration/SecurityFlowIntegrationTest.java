@@ -38,12 +38,29 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+/**
+ * Prueba de INTEGRACIÓN del flujo completo de seguridad: aplicación entera, base PostgreSQL real y JWT reales, sin dobles. Cada
+ * prueba hace lo que haría un cliente: se registra, inicia sesión, obtiene un token y lo envía en la cabecera Authorization para
+ * llamar a la API, y se comprueba qué le permite o le niega la seguridad.
+ *
+ * <ul>
+ *   <li>{@code @AutoConfigureMockMvc}: ofrece un MockMvc conectado a la aplicación completa (con filtros de seguridad reales).</li>
+ *   <li>Esta clase NO es {@code @Transactional}: cada llamada confirma sus cambios en la base, como en producción. Por eso cada
+ *       prueba usa un sufijo aleatorio (UUID) en usernames y códigos de evento: así no chocan entre sí aunque compartan la base.</li>
+ *   <li>Los usuarios ADMIN y STAFF se crean directamente en la base ({@code createPrivileged}), porque por la API solo se
+ *       puede obtener el rol USER.</li>
+ *   <li>Política D6: pedir un recurso inexistente que pertenecería a otro usuario responde 403 igual que uno existente, para no revelar qué existe.</li>
+ * </ul>
+ */
 @Testcontainers
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class SecurityFlowIntegrationTest {
 
+    // Contenedor Docker con PostgreSQL REAL, compartido por todas las pruebas de esta clase (static). @Container lo
+    // arranca y lo detiene; @ServiceConnection configura el DataSource de Spring para que apunte a él, sin escribir
+    // url ni credenciales. Flyway aplica las migraciones en esa base vacía. Requiere Docker en ejecución.
     @Container
     @ServiceConnection
     static PostgreSQLContainer postgres =
@@ -58,9 +75,12 @@ class SecurityFlowIntegrationTest {
     @Autowired PasswordEncoder passwordEncoder;
     @Autowired PlatformTransactionManager txManager;
 
+    // Permite ejecutar un bloque de código dentro de una transacción propia (se usa para escribir directamente en la base).
     private TransactionTemplate tx;
+    // Sufijo aleatorio distinto en cada prueba: evita colisiones de username, email y códigos al compartir la base.
     private String suffix;
 
+    // Antes de cada prueba: nueva plantilla de transacción, sufijo aleatorio y, si no existe, el recinto VEN-SEC-01 que usan los eventos.
     @BeforeEach
     void setUp() {
         tx = new TransactionTemplate(txManager);
@@ -71,6 +91,7 @@ class SecurityFlowIntegrationTest {
     }
 
     // ------------------------------------------------------------ helpers
+    // Registra un usuario por la API (POST /api/users) y comprueba que la respuesta no trae contraseña ni hash.
     private void register(String username, String email) throws Exception {
         mockMvc.perform(post("/api/users").contentType(APPLICATION_JSON).content("""
                 {"username":"%s","email":"%s","firstName":"Test","lastName":"User",
@@ -80,6 +101,7 @@ class SecurityFlowIntegrationTest {
                 .andExpect(jsonPath("$.passwordHash").doesNotExist());
     }
 
+    // Inicia sesión y devuelve el valor listo para la cabecera Authorization: "Bearer <token>". JsonPath.read extrae el token del JSON.
     private String login(String identifier, String password) throws Exception {
         String body = mockMvc.perform(post("/api/auth/login").contentType(APPLICATION_JSON)
                         .content("""
@@ -89,6 +111,7 @@ class SecurityFlowIntegrationTest {
         return "Bearer " + JsonPath.read(body, "$.accessToken");
     }
 
+    // Crea un usuario con un rol privilegiado (ADMIN o STAFF) escribiendo directo en la base dentro de una transacción.
     private void createPrivileged(String username, Role role) {
         tx.executeWithoutResult(s -> {
             User user = new User(username, username + "@pulsepass.test");
@@ -99,6 +122,7 @@ class SecurityFlowIntegrationTest {
         });
     }
 
+    // Como ADMIN, crea un evento futuro (hoy + 30 días) y, si se indica, lo publica.
     private void createEvent(String adminAuth, String code, boolean publish) throws Exception {
         mockMvc.perform(post("/api/events").header("Authorization", adminAuth)
                         .contentType(APPLICATION_JSON).content("""
@@ -112,6 +136,7 @@ class SecurityFlowIntegrationTest {
         }
     }
 
+    // Compra un ticket GENERAL por la API y devuelve su código.
     private String buyTicket(String auth, String email, String eventCode) throws Exception {
         String body = mockMvc.perform(post("/api/tickets").header("Authorization", auth)
                         .contentType(APPLICATION_JSON).content("""
@@ -122,6 +147,7 @@ class SecurityFlowIntegrationTest {
     }
 
     // ------------------------------------------------------------ tests
+    // Flujo feliz: registro -> login (token Bearer, 900 s) -> GET /me con ese token. También se puede iniciar sesión con el email en vez del username.
     @Test
     void loginReturnsBearerTokenValidFor900SecondsAndMeWorks() throws Exception {
         String andrea = "andrea" + suffix;
@@ -139,6 +165,7 @@ class SecurityFlowIntegrationTest {
                 .andExpect(jsonPath("$.roles[0]").value("USER"));
     }
 
+    // Contraseña incorrecta y usuario inexistente dan el MISMO mensaje 401 (no se puede averiguar qué usuarios existen) y la respuesta no filtra trazas ni nombres de excepciones.
     @Test
     void wrongPasswordAndUnknownUserReturnTheSameGeneric401() throws Exception {
         String andrea = "andrea" + suffix;
@@ -160,6 +187,7 @@ class SecurityFlowIntegrationTest {
         assertThat(wrongPassword).doesNotContain("stackTrace", "BadCredentials");
     }
 
+    // FR-SECTKT-01: Andrea intenta comprar un ticket a nombre de Carlos y recibe 403; luego se comprueba que Carlos no recibió ningún ticket.
     @Test
     void userCannotBuyForAnotherUser() throws Exception {
         String admin = "admin" + suffix, andrea = "andrea" + suffix, carlos = "carlos" + suffix;
@@ -182,6 +210,8 @@ class SecurityFlowIntegrationTest {
                 .andExpect(jsonPath("$.length()").value(0));
     }
 
+    // Un tercero recibe 403 al leer el ticket ajeno, listar los tickets de otro, ver su usuario o cancelar su ticket. Un código
+    // inexistente también da 403 (política D6). El dueño sí puede leerlo y cancelarlo (queda CANCELLED).
     @Test
     void userCannotReadOrCancelForeignTicketButOwnerCan() throws Exception {
         String admin = "admin" + suffix, andrea = "andrea" + suffix, carlos = "carlos" + suffix;
@@ -215,6 +245,7 @@ class SecurityFlowIntegrationTest {
                 .andExpect(jsonPath("$.status").value("CANCELLED"));
     }
 
+    // Un USER no puede publicar un evento (403) pero ADMIN sí. Un USER no puede marcar un ticket como usado (403) pero STAFF sí (queda USED); usarlo de nuevo da 409 por regla de negocio.
     @Test
     void onlyAdminPublishesAndOnlyStaffOrAdminUseTickets() throws Exception {
         String admin = "admin" + suffix, laura = "laura" + suffix, andrea = "andrea" + suffix;
@@ -242,6 +273,7 @@ class SecurityFlowIntegrationTest {
                 .andExpect(status().isConflict());   // regla de negocio heredada
     }
 
+    // Un evento DRAFT: anónimo recibe 404 (como si no existiera), ADMIN lo ve (200) y no aparece en la lista pública de publicados.
     @Test
     void draftEventsAreHiddenFromAnonymousButVisibleToAdmin() throws Exception {
         String admin = "admin" + suffix;
@@ -257,6 +289,8 @@ class SecurityFlowIntegrationTest {
                 .andExpect(jsonPath("$[?(@.eventCode=='DR-%s')]".formatted(suffix)).isEmpty());
     }
 
+    // Tres casos de token inaceptable, todos 401: token con la firma alterada (se cambian sus últimos 5 caracteres), basura tras "Bearer" y el token enviado
+    // como parámetro de la URL (solo se acepta por la cabecera Authorization).
     @Test
     void tamperedAndMalformedTokensGet401() throws Exception {
         String andrea = "andrea" + suffix;
@@ -273,6 +307,7 @@ class SecurityFlowIntegrationTest {
                 .andExpect(status().isUnauthorized());
     }
 
+    // Tras desactivar al usuario en la base, el MISMO token (aún vigente) deja de funcionar (401) y el login también falla: el filtro consulta el estado actual en cada petición.
     @Test
     void deactivatedUserLosesAccessWithAStillValidToken() throws Exception {
         String andrea = "andrea" + suffix;
@@ -289,6 +324,7 @@ class SecurityFlowIntegrationTest {
                 .andExpect(status().isUnauthorized());
     }
 
+    // Un registro que intenta colarse como ADMIN (enviando "roles" y "role" en el JSON) se crea, pero esos campos se ignoran y el usuario solo tiene el rol USER.
     @Test
     void registrationCannotAssignPrivilegedRoles() throws Exception {
         String hacker = "hacker" + suffix;
@@ -303,6 +339,7 @@ class SecurityFlowIntegrationTest {
                 .andExpect(jsonPath("$.roles[0]").value("USER"));
     }
 
+    // T-SEC-015: un tercero recibe 403 sin datos del usuario (también si el usuario no existe: política D6). El propio usuario recibe 200 y ADMIN puede ver datos ajenos; un anónimo recibe 401.
     @Test
     void userCannotReadForeignUserByUsernameButOwnerAndAdminCan() throws Exception {
         String admin = "admin" + suffix, andrea = "andrea" + suffix, carlos = "carlos" + suffix;

@@ -32,6 +32,24 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+/**
+ * Prueba de la CAPA WEB (HTTP) del controlador, sin base de datos ni lógica de negocio real. Se envían peticiones HTTP simuladas
+ * con {@code MockMvc} y se comprueba la ruta, el código de respuesta, el JSON devuelto, las validaciones ({@code @Valid}) y cómo
+ * {@code GlobalExceptionHandler} traduce las excepciones.
+ *
+ * <ul>
+ *   <li>{@code @WebMvcTest}: levanta solo Spring MVC y seguridad, y únicamente el controlador indicado.</li>
+ *   <li>{@code @Import}: agrega lo que @WebMvcTest no carga solo: GlobalExceptionHandler, SecurityConfig y los manejadores de
+ *       errores 401/403.</li>
+ *   <li>{@code @MockitoBean}: reemplaza el servicio por un doble. {@code when(...).thenReturn(...)} o {@code thenThrow(...)} define
+ *       lo que "responde" el servicio, así solo se prueba el controlador. JwtService, CustomUserDetailsService y
+ *       AuthorizationService también se simulan: son dependencias de la seguridad y así el contexto arranca sin el resto de la aplicación.</li>
+ *   <li>{@code jsonPath("$.campo")}: lee un campo del JSON de respuesta. {@code verify(servicio, never())} demuestra que el
+ *       controlador rechazó la petición ANTES de llegar al servicio.</li>
+ * </ul>
+ *
+ * Las rutas de recintos son públicas: las pruebas se hacen sin usuario autenticado.
+ */
 @WebMvcTest(VenueController.class)
 @Import({GlobalExceptionHandler.class, SecurityConfig.class, SecurityErrorWriter.class,
         RestAuthenticationEntryPoint.class, RestAccessDeniedHandler.class})
@@ -51,6 +69,7 @@ class VenueControllerTest {
     @MockitoBean
     private AuthorizationService authorizationService;
 
+    // Recinto de ejemplo (capacidad 3) que devuelve el servicio simulado.
     private VenueResponse venue() {
         return new VenueResponse(
                 1L,
@@ -63,6 +82,7 @@ class VenueControllerTest {
     }
 
     // TEST-CTRL-VEN-001 / AC-CTRL001: venue existente -> 200
+    // Recinto existente: 200 y todos los campos del JSON (id, código, nombre, ciudad, capacidad y estado).
     @Test
     void shouldReturnVenueByCode() throws Exception {
         when(venueService.findByCode("VEN-SMR-01")).thenReturn(venue());
@@ -81,6 +101,7 @@ class VenueControllerTest {
     }
 
     // TEST-CTRL-VEN-002 / AC-CTRL002: venue inexistente -> 404 con ErrorResponse
+    // Recinto inexistente: 404 con el contrato completo de error (timestamp, status, error, message y details como mapa).
     @Test
     void shouldReturn404WhenVenueDoesNotExist() throws Exception {
         when(venueService.findByCode("NO-EXISTE"))
@@ -97,6 +118,7 @@ class VenueControllerTest {
     }
 
     // TEST-CTRL-VEN-003: venues activos -> 200
+    // Lista de activos (200). Verifica que "/active" no se confundió con la ruta /{code}.
     @Test
     void shouldReturnActiveVenues() throws Exception {
         when(venueService.findActiveVenues()).thenReturn(List.of(venue()));
@@ -113,6 +135,8 @@ class VenueControllerTest {
     }
 
     // Error inesperado -> 500 sin exponer detalles internos (NFR-CTRL-007)
+    // Un error inesperado (aquí un RuntimeException con un texto sensible) responde 500 con un mensaje genérico y
+    // NO filtra el detalle interno al cliente (NFR-CTRL-007). not(containsString(...)) comprueba que el texto no aparece.
     @Test
     void shouldReturn500WithoutLeakingInternalDetails() throws Exception {
         when(venueService.findByCode("VEN-SMR-01"))

@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
+/** Implementación de {@link VenueService}. Todos sus métodos son de solo lectura. */
 @Service
 @Transactional(readOnly = true)
 public class VenueServiceImpl implements VenueService {
@@ -22,6 +23,7 @@ public class VenueServiceImpl implements VenueService {
         this.venueMapper = venueMapper;
     }
 
+    // Optional.map convierte la entidad a DTO si existe; si está vacío, orElseThrow lanza 404.
     @Override
     public VenueResponse findByCode(String code) {
         return venueRepository.findByCode(code)
@@ -29,6 +31,7 @@ public class VenueServiceImpl implements VenueService {
                 .orElseThrow(() -> new ResourceNotFoundException("Venue not found: " + code));
     }
 
+    // El nombre del método del repositorio ya expresa el filtro (active = true) y el orden (por nombre).
     @Override
     public List<VenueResponse> findActiveVenues() {
         return venueRepository.findByActiveTrueOrderByNameAsc()

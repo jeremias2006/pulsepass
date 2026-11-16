@@ -1,7 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!-- Archivo de construcción de Maven (POM): declara versión de Java, dependencias y plugins. Los comentarios de
+         cada bloque explican para qué sirve. -->
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
+    <!-- Proyecto padre: spring-boot-starter-parent fija las versiones compatibles de Spring y de casi todas las
+         librerías (por eso la mayoría de dependencias no llevan version) y la configuración base de compilación. -->
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
@@ -11,6 +15,8 @@
     <groupId>com.pulsepass</groupId>
     <artifactId>pulsepass</artifactId>
     <version>0.0.1-SNAPSHOT</version>
+    <!-- Identidad del proyecto. Las etiquetas vacías de licencia, desarrolladores y scm son relleno que genera
+         Spring Initializr; no tienen efecto. -->
     <name>pulsepass</name>
     <description>pulsepass</description>
     <url/>
@@ -26,101 +32,122 @@
         <tag/>
         <url/>
     </scm>
+    <!-- Propiedades reutilizables: versión de Java (21) y versiones de MapStruct y JJWT, que las dependencias referencian con ${...}. -->
     <properties>
         <java.version>21</java.version>
         <mapstruct.version>1.6.3</mapstruct.version>
         <jjwt.version>0.13.0</jjwt.version>
     </properties>
+    <!-- scope runtime: solo se necesita al ejecutar, no para compilar. scope test: solo se usa en las pruebas. -->
     <dependencies>
+        <!-- JPA con Hibernate y Spring Data: entidades y repositorios -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-jpa</artifactId>
         </dependency>
+        <!-- Integración de Flyway: ejecuta las migraciones de db/migration al arrancar -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-flyway</artifactId>
         </dependency>
+        <!-- Soporte de PostgreSQL para Flyway (desde Flyway 10 viene como módulo aparte) -->
         <dependency>
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-database-postgresql</artifactId>
         </dependency>
 
+        <!-- Driver JDBC de PostgreSQL (solo en ejecución) -->
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
             <scope>runtime</scope>
         </dependency>
+        <!-- Soporte de pruebas para la capa JPA -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-jpa-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- Soporte de pruebas para Flyway -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-flyway-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- Integración Spring Boot con Testcontainers (@ServiceConnection) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-testcontainers</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- Testcontainers para JUnit 5: ciclo de vida de los contenedores Docker en las pruebas -->
         <dependency>
             <groupId>org.testcontainers</groupId>
             <artifactId>testcontainers-junit-jupiter</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- Módulo de Testcontainers para PostgreSQL -->
         <dependency>
             <groupId>org.testcontainers</groupId>
             <artifactId>testcontainers-postgresql</artifactId>
             <scope>test</scope>
         </dependency>
 
+        <!-- MapStruct (API y anotaciones): convierte entidades en DTOs. El procesador está en el compilador, más abajo -->
         <dependency>
             <groupId>org.mapstruct</groupId>
             <artifactId>mapstruct</artifactId>
             <version>${mapstruct.version}</version>
         </dependency>
+        <!-- Herramientas base de prueba: JUnit 5, Mockito y AssertJ -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- API REST con Spring MVC y servidor web embebido (Tomcat) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webmvc</artifactId>
         </dependency>
 
+        <!-- Bean Validation: @Valid, @NotBlank, @Size, @Email... -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
+        <!-- Pruebas de controladores: @WebMvcTest y MockMvc -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webmvc-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- Spring Security: autenticación y autorización -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-security</artifactId>
         </dependency>
+        <!-- JJWT: crear y validar tokens JWT. jjwt-api es la API que usa nuestro código -->
         <dependency>
             <groupId>io.jsonwebtoken</groupId>
             <artifactId>jjwt-api</artifactId>
             <version>${jjwt.version}</version>
         </dependency>
+        <!-- JJWT: implementación interna (solo en ejecución) -->
         <dependency>
             <groupId>io.jsonwebtoken</groupId>
             <artifactId>jjwt-impl</artifactId>
             <version>${jjwt.version}</version>
             <scope>runtime</scope>
         </dependency>
+        <!-- JJWT: serialización del JSON del token con Jackson (solo en ejecución) -->
         <dependency>
             <groupId>io.jsonwebtoken</groupId>
             <artifactId>jjwt-jackson</artifactId>
             <version>${jjwt.version}</version>
             <scope>runtime</scope>
         </dependency>
+        <!-- Utilidades para probar seguridad: @WithMockUser, etc. -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-security-test</artifactId>
@@ -128,12 +155,16 @@
         </dependency>
     </dependencies>
 
+    <!-- Construcción: empaquetado ejecutable de Spring Boot y configuración del compilador. -->
     <build>
         <plugins>
+            <!-- Empaqueta la aplicación como un JAR ejecutable y habilita el comando spring-boot:run. -->
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
             </plugin>
+            <!-- Compilador de Java. annotationProcessorPaths registra el procesador de MapStruct: durante la compilación
+                 genera las clases que implementan las interfaces del paquete mapper. -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>

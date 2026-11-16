@@ -41,6 +41,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ActiveProfiles("test")
 class RegistrationAtomicityIntegrationTest {
 
+    // Contenedor Docker con PostgreSQL REAL, compartido por todas las pruebas de esta clase (static). @Container lo
+    // arranca y lo detiene; @ServiceConnection configura el DataSource de Spring para que apunte a él, sin escribir
+    // url ni credenciales. Flyway aplica las migraciones en esa base vacía. Requiere Docker en ejecución.
     @Container
     @ServiceConnection
     static PostgreSQLContainer postgres =
@@ -52,14 +55,20 @@ class RegistrationAtomicityIntegrationTest {
     @Autowired UserRepository userRepository;
     @Autowired UserCredentialRepository credentialRepository;
 
+    // @MockitoSpyBean envuelve el PasswordEncoder REAL de la aplicación en un espía de Mockito: se comporta normal salvo
+    // cuando se le ordena fallar (doThrow). Por eso esta clase queda separada: el espía altera el contexto de Spring.
     @MockitoSpyBean PasswordEncoder passwordEncoder;
 
+    // JSON de registro válido para el username dado (el email se deriva de él).
     private String body(String username) {
         return """
                 {"username":"%s","email":"%s@mail.com","firstName":"Test","lastName":"User",
                  "birthDate":"1995-05-20","password":"%s"}""".formatted(username, username, PASSWORD);
     }
 
+    // Secuencia: (1) se obliga a encode() a fallar, lo que ocurre DESPUÉS de insertar el User y ANTES de guardar la credencial;
+    // (2) el registro responde 500; (3) no quedó nada persistido (ni usuario, ni perfil, ni credencial: se comparan los conteos);
+    // (4) se restaura el espía y el reintento con el mismo username funciona, lo que demuestra que no quedó un usuario huérfano bloqueándolo.
     @Test
     void failureWhileSavingCredentialRollsBackTheUser() throws Exception {
         String username = "atomic" + UUID.randomUUID().toString().substring(0, 8);

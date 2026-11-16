@@ -9,6 +9,20 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Optional;
 
+/**
+ * Carga usuarios para Spring Security desde nuestra base de datos. Se usa en dos momentos:
+ * <ol>
+ *   <li><b>Login:</b> el {@code AuthenticationManager} llama a {@link #loadUserByUsername(String)} para
+ *       obtener el hash de la contraseña y compararlo con la que escribió el usuario.</li>
+ *   <li><b>Cada petición con token:</b> {@code JwtAuthenticationFilter} llama a
+ *       {@link #loadUserById(Long)}. El token solo trae el id; los roles y el estado de la cuenta se
+ *       leen de la base en cada petición, así que quitar un rol o desactivar a un usuario surte efecto
+ *       de inmediato, sin esperar a que el token venza.</li>
+ * </ol>
+ * Es {@code @Transactional(readOnly = true)} porque {@code SecurityPrincipal.from} necesita recorrer
+ * relaciones LAZY (usuario y roles) y eso requiere una transacción abierta.
+ * Los mensajes de error son genéricos para no revelar si un usuario existe.
+ */
 @Service
 @Transactional(readOnly = true)
 public class CustomUserDetailsService implements UserDetailsService {

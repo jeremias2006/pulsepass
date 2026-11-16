@@ -22,6 +22,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+/**
+ * Prueba unitaria de JwtAuthenticationFilter sin servidor ni contexto de Spring: se usan los objetos simulados de Spring
+ * (MockHttpServletRequest, MockHttpServletResponse y MockFilterChain) y dobles de JwtService y CustomUserDetailsService.
+ *
+ * Regla central que se verifica: el filtro NUNCA lanza excepción ni responde error. O deja la autenticación en el
+ * SecurityContext, o la deja vacía; y SIEMPRE continúa la cadena ({@code chain.getRequest() != null} significa que el filtro
+ * llamó a chain.doFilter). Quien responde 401 después es RestAuthenticationEntryPoint.
+ */
 @ExtendWith(MockitoExtension.class)
 class JwtAuthenticationFilterTest {
 
@@ -52,6 +60,7 @@ class JwtAuthenticationFilterTest {
 
     // ------------------------------------------------------------ sin token
 
+    // Sin cabecera Authorization: no se autentica, la cadena continúa y no se consulta nada.
     @Test
     void withoutAuthorizationHeader_continuesWithEmptyContext() throws Exception {
         filter.doFilter(request, response, chain);
@@ -61,6 +70,7 @@ class JwtAuthenticationFilterTest {
         verifyNoInteractions(jwtService, userDetailsService);
     }
 
+    // Un esquema distinto de Bearer (aquí Basic) se ignora.
     @Test
     void nonBearerScheme_isIgnored() throws Exception {
         request.addHeader("Authorization", "Basic YW5kcmVhOnNlY3JldA==");
@@ -72,6 +82,7 @@ class JwtAuthenticationFilterTest {
         verifyNoInteractions(jwtService, userDetailsService);
     }
 
+    // "Bearer" seguido de solo espacios: token vacío, se ignora sin llamar a JwtService.
     @Test
     void emptyBearerToken_isIgnored() throws Exception {
         request.addHeader("Authorization", "Bearer   ");
@@ -85,6 +96,7 @@ class JwtAuthenticationFilterTest {
 
     // -------------------------------------------------------- token válido
 
+    // Caso feliz: token válido -> autenticación con el principal cargado y su rol ROLE_USER.
     @Test
     void validBearer_setsAuthenticationWithPrincipal() throws Exception {
         SecurityPrincipal principal = principal(7L, true);
@@ -103,6 +115,7 @@ class JwtAuthenticationFilterTest {
         assertThat(chain.getRequest()).isNotNull();
     }
 
+    // El prefijo se acepta sin distinguir mayúsculas ("bearer" funciona igual que "Bearer").
     @Test
     void bearerSchemeIsCaseInsensitive() throws Exception {
         SecurityPrincipal principal = principal(7L, true);
@@ -117,6 +130,7 @@ class JwtAuthenticationFilterTest {
 
     // ----------------------------------------------------- token no válido
 
+    // Token inválido: no hay excepción ni autenticación, y ni se consulta al usuario.
     @Test
     void invalidBearer_continuesWithoutAuthenticationAndWithoutException() throws Exception {
         when(jwtService.extractUserId("bad-token")).thenThrow(new InvalidTokenException("Invalid token"));
@@ -129,6 +143,7 @@ class JwtAuthenticationFilterTest {
         verifyNoInteractions(userDetailsService);
     }
 
+    // Aunque ocurra un error inesperado al validar, el filtro no lo propaga (no se vuelve un 500): deja la petición sin autenticar.
     @Test
     void unexpectedRuntimeException_neverBecomesHttp500() throws Exception {
         when(jwtService.extractUserId("weird-token")).thenThrow(new IllegalArgumentException("boom"));
@@ -140,6 +155,7 @@ class JwtAuthenticationFilterTest {
         assertThat(chain.getRequest()).isNotNull();
     }
 
+    // Token válido de un usuario que ya no existe: no se autentica.
     @Test
     void validTokenOfUnknownUser_isNotAuthenticated() throws Exception {
         when(jwtService.extractUserId("good-token")).thenReturn(99L);
@@ -152,6 +168,7 @@ class JwtAuthenticationFilterTest {
         assertThat(chain.getRequest()).isNotNull();
     }
 
+    // UC-SEC-10 / SEC011: el token sigue vigente pero la cuenta fue desactivada: no se autentica.
     @Test
     void inactiveUser_isNotAuthenticated() throws Exception {
         // UC-SEC-10 / SEC011: el token sigue siendo válido, pero la cuenta fue desactivada
@@ -167,6 +184,7 @@ class JwtAuthenticationFilterTest {
 
     // ------------------------------------------------- casos sospechosos
 
+    // Dos cabeceras Authorization (caso sospechoso): se descartan sin validar ninguna.
     @Test
     void twoAuthorizationHeaders_areNotAuthenticated() throws Exception {
         request.addHeader("Authorization", "Bearer token-uno");
@@ -179,6 +197,7 @@ class JwtAuthenticationFilterTest {
         verifyNoInteractions(jwtService, userDetailsService);
     }
 
+    // Si la petición ya estaba autenticada, el filtro no la sobrescribe ni consulta nada.
     @Test
     void existingAuthentication_isNotOverwritten() throws Exception {
         Authentication existing = UsernamePasswordAuthenticationToken.authenticated(
@@ -192,6 +211,7 @@ class JwtAuthenticationFilterTest {
         verifyNoInteractions(jwtService, userDetailsService);
     }
 
+    // FR-SECAUTH-007: el token solo se acepta por la cabecera Authorization, nunca como parámetro de la URL.
     @Test
     void tokenInQueryString_isIgnored() throws Exception {
         // FR-SECAUTH-007: el JWT solo se acepta por el header Authorization
@@ -206,6 +226,7 @@ class JwtAuthenticationFilterTest {
 
     // ----------------------------------------------------------------- helpers
 
+    // Crea un principal de prueba (rol USER) con el id y el estado habilitado/deshabilitado indicados.
     private SecurityPrincipal principal(Long id, boolean enabled) {
         return new SecurityPrincipal(id, "andrea", "andrea@mail.com", "hash", enabled,
                 List.of(new SimpleGrantedAuthority("ROLE_USER")));

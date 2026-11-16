@@ -24,6 +24,19 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/**
+ * Prueba unitaria de UserServiceImpl con Mockito: se prueba la lógica de la clase aislada, sin base de datos ni Spring.
+ *
+ * <ul>
+ *   <li>{@code @ExtendWith(MockitoExtension.class)}: activa las anotaciones de Mockito en esta clase.</li>
+ *   <li>{@code @Mock}: crea dobles falsos de las dependencias (repositorio y mapper). Se les indica qué devolver con
+ *       {@code when(...).thenReturn(...)}.</li>
+ *   <li>{@code @InjectMocks}: crea el UserServiceImpl real e inyecta esos dobles en su constructor.</li>
+ * </ul>
+ *
+ * Cada prueba sigue el patrón ARRANGE (preparar), ACT (ejecutar) y ASSERT (comprobar). Los códigos TEST-USER-00X son
+ * identificadores propios de las pruebas; las reglas de negocio son los BR-USER-00X del servicio.
+ */
 @ExtendWith(MockitoExtension.class)
 class UserServiceImplTest {
 
@@ -36,6 +49,8 @@ class UserServiceImplTest {
     private UserServiceImpl userService;
 
     // ---------- TEST-USER-001 ----------
+    // Caso feliz. thenAnswer(inv -> inv.getArgument(0)) hace que save() devuelva el mismo objeto que recibe.
+    // ArgumentCaptor captura el User que el servicio le pasó a save() para comprobar que quedó activo y con perfil.
     @Test
     void register_validUser_savesActiveUserWithProfile() {
         // ARRANGE
@@ -59,6 +74,7 @@ class UserServiceImplTest {
     }
 
     // ---------- TEST-USER-002 ----------
+    // BR-USER-001: username repetido -> DuplicateResourceException. verify(never()).save(...) prueba que no se guardó nada.
     @Test
     void register_duplicatedUsername_throwsDuplicateResource() {
         // ARRANGE
@@ -72,6 +88,7 @@ class UserServiceImplTest {
     }
 
     // ---------- TEST-USER-003 ----------
+    // BR-USER-002: email repetido (el username sí está libre) -> DuplicateResourceException y no se guarda nada.
     @Test
     void register_duplicatedEmail_throwsDuplicateResource() {
         // ARRANGE
@@ -86,6 +103,7 @@ class UserServiceImplTest {
     }
 
     // ---------- TEST-USER-004 ----------
+    // BR-USER-005: una fecha de nacimiento futura (mañana) -> BusinessRuleException y no se guarda nada.
     @Test
     void register_futureBirthDate_throwsBusinessRule() {
         // ARRANGE
@@ -99,6 +117,7 @@ class UserServiceImplTest {
         verify(userRepository, never()).save(any(User.class));
     }
 
+    // Arma un request válido (contraseña de más de 12 caracteres) variando solo lo que cada prueba necesita.
     private RegisterUserRequest request(String username, String email, LocalDate birthDate) {
         return new RegisterUserRequest(username, email, "Andrea", "Lopez", "3000000000", "Santa Marta", birthDate, "UnaFraseSeguraLarga2026!");
     }

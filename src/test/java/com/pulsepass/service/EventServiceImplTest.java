@@ -34,6 +34,11 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/**
+ * Prueba unitaria de EventServiceImpl con Mockito: creación, publicación, asignación de artistas y visibilidad de eventos según el
+ * rol, sin base de datos. Los códigos TEST-EVENT-0XX son identificadores propios de las pruebas; cada una indica la regla BR-EVENT
+ * que cubre. En los casos de error, {@code verify(eventRepository, never()).save(...)} garantiza que no se persistió nada.
+ */
 @ExtendWith(MockitoExtension.class)
 class EventServiceImplTest {
 
@@ -58,6 +63,7 @@ class EventServiceImplTest {
     private EventServiceImpl eventService;
 
     // ---------- TEST-EVENT-001 ----------
+    // Un evento publicado existente se devuelve convertido a DTO.
     @Test
     void findByCode_existingEvent_returnsDto() {
         // ARRANGE
@@ -74,6 +80,7 @@ class EventServiceImplTest {
     }
 
     // ---------- TEST-EVENT-002 ----------
+    // Evento inexistente -> ResourceNotFoundException (404) y el mensaje incluye el código buscado.
     @Test
     void findByCode_unknownEvent_throwsResourceNotFound() {
         // ARRANGE
@@ -86,6 +93,7 @@ class EventServiceImplTest {
     }
 
     // ---------- TEST-EVENT-003 ----------
+    // BR-EVENT-005: un evento válido se guarda siempre en estado DRAFT (ArgumentCaptor captura el Event guardado).
     @Test
     void create_validRequest_savesEventAsDraft() {
         // ARRANGE
@@ -107,6 +115,7 @@ class EventServiceImplTest {
     }
 
     // ---------- BR-EVENT-001 ----------
+    // BR-EVENT-001: el eventCode ya existe -> DuplicateResourceException.
     @Test
     void create_duplicatedCode_throwsDuplicateResource() {
         // ARRANGE
@@ -119,6 +128,7 @@ class EventServiceImplTest {
     }
 
     // ---------- TEST-EVENT-004 ----------
+    // BR-EVENT-002: el recinto no existe -> ResourceNotFoundException.
     @Test
     void create_unknownVenue_throwsAndNeverSaves() {
         // ARRANGE
@@ -132,6 +142,7 @@ class EventServiceImplTest {
     }
 
     // ---------- TEST-EVENT-005 ----------
+    // BR-EVENT-003: el recinto está inactivo -> BusinessRuleException.
     @Test
     void create_inactiveVenue_throwsBusinessRule() {
         // ARRANGE
@@ -146,6 +157,7 @@ class EventServiceImplTest {
     }
 
     // ---------- TEST-EVENT-006 ----------
+    // BR-EVENT-004: la fecha del evento es pasada (ayer) -> BusinessRuleException.
     @Test
     void create_pastDate_throwsBusinessRule() {
         // ARRANGE
@@ -160,6 +172,7 @@ class EventServiceImplTest {
     }
 
     // ---------- TEST-EVENT-007 ----------
+    // Un borrador con fecha futura y recinto activo pasa a PUBLISHED y se guarda.
     @Test
     void publish_validDraft_becomesPublished() {
         // ARRANGE
@@ -179,6 +192,7 @@ class EventServiceImplTest {
     }
 
     // ---------- TEST-EVENT-008 ----------
+    // BR-EVENT-007: solo se publica un DRAFT; uno CANCELLED se rechaza y conserva su estado.
     @Test
     void publish_cancelledEvent_throwsAndNeverSaves() {
         // ARRANGE
@@ -193,6 +207,7 @@ class EventServiceImplTest {
     }
 
     // ---------- FR-SVC-007: addArtist (unit tests requeridos) ----------
+    // El artista queda asociado al evento y el evento se guarda.
     @Test
     void addArtist_validArtist_associatesAndSaves() {
         // ARRANGE
@@ -210,6 +225,7 @@ class EventServiceImplTest {
         verify(eventRepository).save(event);
     }
 
+    // BR-EVENT-010: el artista ya estaba asignado (se compara por id) -> BusinessRuleException.
     @Test
     void addArtist_alreadyAssigned_throwsBusinessRule() {
         // ARRANGE
@@ -225,6 +241,7 @@ class EventServiceImplTest {
         verify(eventRepository, never()).save(any(Event.class));
     }
 
+    // BR-EVENT-011: no se agregan artistas a un evento CANCELLED.
     @Test
     void addArtist_cancelledEvent_throwsBusinessRule() {
         // ARRANGE
@@ -238,6 +255,7 @@ class EventServiceImplTest {
     }
 
     // ---------- Borradores: FR-SECEVT-02 ----------
+    // Visibilidad: un borrador consultado por el público responde 404 (como si no existiera) y ni siquiera se llama al mapper.
     @Test
     void findByCode_draftAsPublic_throwsNotFoundAndNeverMaps() {
         // ARRANGE
@@ -251,6 +269,7 @@ class EventServiceImplTest {
         verify(eventMapper, never()).toResponse(any(Event.class));
     }
 
+    // Visibilidad: STAFF/ADMIN sí pueden ver el borrador.
     @Test
     void findByCode_draftAsStaffOrAdmin_returnsDto() {
         // ARRANGE
@@ -266,6 +285,7 @@ class EventServiceImplTest {
         assertThat(result.status()).isEqualTo(EventStatus.DRAFT);
     }
 
+    // Un evento PUBLISHED es visible para todos y ni siquiera se consulta el rol (verify never isStaffOrAdmin).
     @Test
     void findByCode_published_isVisibleWithoutPrivilegeCheck() {
         // ARRANGE
@@ -282,6 +302,7 @@ class EventServiceImplTest {
     }
 
     // ---------- Borradores: FR-SECEVT-06 ----------
+    // El público solo recibe los eventos publicados; el borrador se filtra y nunca se mapea.
     @Test
     void findByArtist_asPublic_returnsOnlyPublishedEvents() {
         // ARRANGE
@@ -300,6 +321,7 @@ class EventServiceImplTest {
         verify(eventMapper, never()).toSummary(draft);
     }
 
+    // STAFF/ADMIN reciben todos los eventos del artista, incluidos los borradores.
     @Test
     void findByArtist_asStaffOrAdmin_returnsAllEvents() {
         // ARRANGE
@@ -318,6 +340,7 @@ class EventServiceImplTest {
     }
 
     // ---------- helpers ----------
+    // Crea un evento real (código CMF-2026, edad mínima 18) con el estado y la fecha dados, asociado al recinto simulado.
     private Event newEvent(EventStatus status, LocalDate date) {
         Event event = new Event("CMF-2026", "Caribbean Music Fest 2026", "desc",
                 date, EventCategory.MUSIC, status, 18);
@@ -325,6 +348,7 @@ class EventServiceImplTest {
         return event;
     }
 
+    // Request de creación válido; solo cambia la fecha para probar fechas futuras y pasadas.
     private CreateEventRequest validRequest(LocalDate date) {
         return new CreateEventRequest("CMF-2026", "Caribbean Music Fest 2026", "desc",
                 EventCategory.MUSIC, date, 18, "VEN-SMR-01");

@@ -28,18 +28,28 @@ import java.time.LocalDateTime;
 import java.util.EnumSet;
 import java.util.List;
 
+/**
+ * Casos de uso de autenticación: registrarse, iniciar sesión y consultar "quién soy".
+ *
+ * <p>Es un orquestador: no guarda contraseñas ni firma tokens por sí mismo, sino que coordina a
+ * {@link UserService} (datos del usuario), el repositorio de credenciales (hash BCrypt y roles),
+ * el {@code AuthenticationManager} de Spring Security (valida identificador y contraseña) y
+ * {@link JwtService} (emite el token de acceso).</p>
+ */
 @Service
 public class AuthService {
 
+    // Logger SLF4J. Solo se registran ids y motivos de error; nunca contraseñas ni tokens.
     private static final Logger log = LoggerFactory.getLogger(AuthService.class);
 
-    private final UserService userService;
-    private final UserRepository userRepository;
-    private final UserCredentialRepository credentialRepository;
-    private final PasswordEncoder passwordEncoder;
-    private final AuthenticationManager authenticationManager;
-    private final JwtService jwtService;
-    private final Clock clock;
+    // Dependencias inmutables (final), inyectadas por Spring a través del constructor.
+    private final UserService userService;                       // crea User + UserProfile (reglas de negocio)
+    private final UserRepository userRepository;                 // recargar el User recién creado
+    private final UserCredentialRepository credentialRepository; // guarda hash de contraseña y roles
+    private final PasswordEncoder passwordEncoder;               // BCrypt (definido en SecurityConfig)
+    private final AuthenticationManager authenticationManager;   // valida identificador + contraseña
+    private final JwtService jwtService;                         // genera el token de acceso
+    private final Clock clock;                                   // reloj inyectable (permite fijar la hora en pruebas)
 
     public AuthService(UserService userService,
                        UserRepository userRepository,
@@ -67,9 +77,12 @@ public class AuthService {
     public UserResponse register(RegisterUserRequest request) {
         UserResponse created = userService.register(request);   // aplica unicidad, edad, etc.
 
+        // Se recarga la entidad User recién creada para enlazarla con su credencial (el DTO solo trae el id).
         User user = userRepository.findById(created.id())
                 .orElseThrow(() -> new IllegalStateException("User not found after registration"));
 
+        // La contraseña se guarda SOLO como hash BCrypt (passwordEncoder.encode), nunca en texto plano.
+        // El rol es siempre USER. ADMIN y STAFF no se pueden obtener registrándose.
         credentialRepository.save(new UserCredential(
                 user,
                 passwordEncoder.encode(request.password()),
@@ -80,27 +93,46 @@ public class AuthService {
         return created;   // contrato anterior: sin hash ni password
     }
 
-    /** FR-SECAUTH-002/003/004. Siempre el MISMO error ante cualquier fallo (no revela si el usuario existe). */
+    /**
+     * FR-SECAUTH-002/003/004. Siempre el MISMO error ante cualquier fallo (no revela si el usuario existe).
+     *
+     * <p>El identificador puede ser email o username. Si las credenciales son correctas devuelve un
+     * token JWT de tipo "Bearer"; el cliente debe enviarlo luego en la cabecera
+     * {@code Authorization: Bearer <token>}.</p>
+     *
+     * @throws BadCredentialsException ante cualquier fallo de autenticación (se traduce a 401)
+     */
     public AuthResponse login(LoginRequest request) {
         try {
+            // Spring Security carga la credencial, compara la contraseña con el hash BCrypt y verifica que la
+            // cuenta esté activa. "unauthenticated(...)" crea un token de entrada que todavía NO está autenticado.
             Authentication authentication = authenticationManager.authenticate(
                     UsernamePasswordAuthenticationToken.unauthenticated(
                             request.identifier().trim(), request.password()));
 
+            // Si la autenticación fue exitosa, el principal es un SecurityPrincipal (lo arma CustomUserDetailsService).
             SecurityPrincipal principal = (SecurityPrincipal) authentication.getPrincipal();
+            // Emite el JWT de acceso para ese usuario (JwtService lo firma y le pone vencimiento).
             String token = jwtService.generateAccessToken(principal.getId());
 
             log.info("login_success userId={}", principal.getId());
+            // Respuesta: el token, su tipo ("Bearer") y cuántos segundos de vigencia le quedan.
             return new AuthResponse(token, "Bearer", jwtService.getExpiresInSeconds());
 
         } catch (AuthenticationException ex) {
             // Incluye: usuario inexistente, contraseña mala, cuenta inactiva (DisabledException)
+            // El motivo real solo queda en el log del servidor; al cliente siempre se le responde el mismo
+            // mensaje genérico, para que nadie pueda averiguar qué usuarios existen (enumeración de usuarios).
             log.warn("login_failed reason={}", ex.getClass().getSimpleName());
             throw new BadCredentialsException("Invalid credentials");
         }
     }
 
-    /** FR-SECAUTH-010 */
+    /**
+     * FR-SECAUTH-010. Devuelve los datos del usuario autenticado (id, username, email y roles).
+     * Spring guarda los roles como "ROLE_USER", "ROLE_ADMIN"...; aquí se les quita el prefijo "ROLE_"
+     * y se ordenan alfabéticamente para que la respuesta sea estable.
+     */
     public AuthenticatedUserResponse me(SecurityPrincipal principal) {
         List<String> roles = principal.getAuthorities().stream()
                 .map(a -> a.getAuthority().substring("ROLE_".length()))

@@ -38,6 +38,13 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/**
+ * Prueba unitaria de TicketServiceImpl con Mockito: las reglas de compra, cancelación y uso de tickets, sin base de datos.
+ *
+ * Los códigos TEST-TICKET-0XX son identificadores propios de las pruebas (no coinciden con los BR-TICKET-0XX del servicio; cada
+ * prueba indica a qué regla corresponde). En las pruebas de error, {@code verify(ticketRepository, never()).save(...)} garantiza que
+ * al violarse una regla no se persiste nada. El recinto (Venue) es un doble para controlar su capacidad.
+ */
 @ExtendWith(MockitoExtension.class)
 class TicketServiceImplTest {
 
@@ -65,6 +72,8 @@ class TicketServiceImplTest {
     }
 
     // ---------- TEST-TICKET-001 ----------
+    // Caso feliz de la compra (BR-TICKET-001 a 009). Capacidad 3 y 0 tickets pagados: el ticket queda PAID, con el precio de la
+    // calculadora (100.00) y el evento NO cambia de estado (no se llenó), por eso eventRepository.save nunca se llama.
     @Test
     void purchase_validRequest_createsPaidTicket() {
         // ARRANGE
@@ -91,6 +100,7 @@ class TicketServiceImplTest {
     }
 
     // ---------- TEST-TICKET-002 ----------
+    // BR-TICKET-001: el comprador no existe -> ResourceNotFoundException (404).
     @Test
     void purchase_unknownUser_throwsResourceNotFound() {
         // ARRANGE
@@ -103,6 +113,7 @@ class TicketServiceImplTest {
     }
 
     // ---------- TEST-TICKET-003 ----------
+    // BR-TICKET-002: el usuario está desactivado -> BusinessRuleException.
     @Test
     void purchase_inactiveUser_throwsBusinessRule() {
         // ARRANGE
@@ -117,6 +128,7 @@ class TicketServiceImplTest {
     }
 
     // ---------- TEST-TICKET-004 ----------
+    // BR-TICKET-004: el evento está en DRAFT (no publicado) -> no se puede comprar.
     @Test
     void purchase_draftEvent_throwsBusinessRule() {
         // ARRANGE
@@ -129,6 +141,7 @@ class TicketServiceImplTest {
     }
 
     // ---------- TEST-TICKET-005 ----------
+    // BR-TICKET-004: tampoco se compra en un evento CANCELLED (solo en PUBLISHED).
     @Test
     void purchase_cancelledEvent_throwsBusinessRule() {
         // ARRANGE
@@ -141,6 +154,8 @@ class TicketServiceImplTest {
     }
 
     // ---------- TEST-TICKET-006 ----------
+    // BR-TICKET-006: el evento exige 18 años y el usuario tiene 17 EN LA FECHA DEL EVENTO -> BusinessRuleException
+    // cuyo mensaje contiene "minimum age".
     @Test
     void purchase_underageUser_throwsBusinessRule() {
         // ARRANGE
@@ -154,6 +169,7 @@ class TicketServiceImplTest {
     }
 
     // ---------- TEST-TICKET-007 ----------
+    // BR-TICKET-007: capacidad 3 y ya hay 3 tickets PAID -> cupo agotado.
     @Test
     void purchase_noCapacityLeft_throwsBusinessRule() {
         // ARRANGE
@@ -169,6 +185,8 @@ class TicketServiceImplTest {
     }
 
     // ---------- TEST-TICKET-008 ----------
+    // BR-TICKET-008: capacidad 3 y 2 vendidos; con esta compra se llena. El ticket se guarda, el evento pasa a SOLD_OUT
+    // y se guarda con eventRepository.save(event).
     @Test
     void purchase_lastAvailableTicket_marksEventSoldOut() {
         // ARRANGE
@@ -193,6 +211,7 @@ class TicketServiceImplTest {
     }
 
     // ---------- TEST-TICKET-009 ----------
+    // Cancelar un ticket PAID lo deja en CANCELLED y lo guarda.
     @Test
     void cancel_paidTicket_becomesCancelled() {
         // ARRANGE
@@ -210,6 +229,7 @@ class TicketServiceImplTest {
     }
 
     // ---------- TEST-TICKET-010 ----------
+    // BR-TICKET-010/011: solo se cancela un ticket PAID; uno ya USED no.
     @Test
     void cancel_usedTicket_throwsBusinessRule() {
         // ARRANGE
@@ -223,6 +243,7 @@ class TicketServiceImplTest {
     }
 
     // ---------- BR-TICKET-012 ----------
+    // BR-TICKET-012: no se cancela después de la fecha del evento (aquí el evento fue ayer).
     @Test
     void cancel_afterEventDate_throwsBusinessRule() {
         // ARRANGE
@@ -237,6 +258,7 @@ class TicketServiceImplTest {
     }
 
     // ---------- TEST-TICKET-011 ----------
+    // Marcar como usado un ticket PAID lo deja en USED y lo guarda.
     @Test
     void markAsUsed_paidTicket_becomesUsed() {
         // ARRANGE
@@ -254,6 +276,7 @@ class TicketServiceImplTest {
     }
 
     // ---------- TEST-TICKET-012 ----------
+    // BR-TICKET-014: un ticket CANCELLED no se puede usar.
     @Test
     void markAsUsed_cancelledTicket_throwsBusinessRule() {
         // ARRANGE
@@ -267,6 +290,7 @@ class TicketServiceImplTest {
     }
 
     // ---------- helpers ----------
+    // Configura los dobles para que el usuario y el evento "existan" (para las pruebas que solo quieren llegar a una regla posterior).
     private void stubUserAndEvent(User user, Event event) {
         when(userRepository.findByEmailIgnoreCase(EMAIL)).thenReturn(Optional.of(user));
         when(eventRepository.findByEventCode("CMF-2026")).thenReturn(Optional.of(event));
@@ -281,6 +305,7 @@ class TicketServiceImplTest {
         return user;
     }
 
+    // Crea un evento real (código CMF-2026) con el estado, fecha y edad mínima dados, asociado al recinto simulado.
     private Event newEvent(EventStatus status, LocalDate date, int minimumAge) {
         Event event = new Event("CMF-2026", "Caribbean Music Fest 2026", "desc",
                 date, EventCategory.MUSIC, status, minimumAge);
@@ -288,11 +313,13 @@ class TicketServiceImplTest {
         return event;
     }
 
+    // Crea un ticket GENERAL de 50.00 con el estado y evento indicados, comprado ahora por un usuario de prueba.
     private Ticket newTicket(TicketStatus status, Event event) {
         return new Ticket("TKT-0001", TicketType.GENERAL, new BigDecimal("50.00"), status,
                 LocalDateTime.now(), new User("andrea", EMAIL), event);
     }
 
+    // Reemplaza al mapper real: arma el TicketResponse a partir del ticket (así se puede comprobar el estado resultante).
     private TicketResponse responseOf(Ticket t) {
         return new TicketResponse(1L, t.getTicketCode(), t.getType(), t.getPrice(),
                 t.getStatus(), t.getPurchaseDate(), t.getUser().getEmail(),

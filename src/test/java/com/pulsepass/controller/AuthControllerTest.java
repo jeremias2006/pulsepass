@@ -39,6 +39,24 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+/**
+ * Prueba de la CAPA WEB (HTTP) del controlador, sin base de datos ni lógica de negocio real. Se envían peticiones HTTP simuladas
+ * con {@code MockMvc} y se comprueba la ruta, el código de respuesta, el JSON devuelto, las validaciones ({@code @Valid}) y cómo
+ * {@code GlobalExceptionHandler} traduce las excepciones.
+ *
+ * <ul>
+ *   <li>{@code @WebMvcTest}: levanta solo Spring MVC y seguridad, y únicamente el controlador indicado.</li>
+ *   <li>{@code @Import}: agrega lo que @WebMvcTest no carga solo: GlobalExceptionHandler, SecurityConfig y los manejadores de
+ *       errores 401/403.</li>
+ *   <li>{@code @MockitoBean}: reemplaza el servicio por un doble. {@code when(...).thenReturn(...)} o {@code thenThrow(...)} define
+ *       lo que "responde" el servicio, así solo se prueba el controlador. JwtService, CustomUserDetailsService y
+ *       AuthorizationService también se simulan: son dependencias de la seguridad y así el contexto arranca sin el resto de la aplicación.</li>
+ *   <li>{@code jsonPath("$.campo")}: lee un campo del JSON de respuesta. {@code verify(servicio, never())} demuestra que el
+ *       controlador rechazó la petición ANTES de llegar al servicio.</li>
+ * </ul>
+ *
+ * /login es público; /me exige estar autenticado. AuthService es el doble que simula el inicio de sesión.
+ */
 @WebMvcTest(AuthController.class)
 @Import({GlobalExceptionHandler.class, SecurityConfig.class, SecurityErrorWriter.class,
         RestAuthenticationEntryPoint.class, RestAccessDeniedHandler.class})
@@ -58,10 +76,12 @@ class AuthControllerTest {
     @MockitoBean
     private AuthorizationService authorizationService;
 
+    // Cuerpo JSON de login válido, reutilizado por varias pruebas (bloque de texto """ ... """).
     private static final String LOGIN_BODY = """
             {"identifier":"andrea","password":"UnaFraseSeguraLarga2026!"}""";
 
     // ---------------------------------------------------------------- login
+    // Login correcto: 200 con accessToken, tokenType "Bearer" y expiresIn 900 (15 minutos).
     @Test
     void loginReturns200WithBearerToken() throws Exception {
         when(authService.login(any(LoginRequest.class)))
@@ -75,6 +95,7 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.expiresIn").value(900));
     }
 
+    // Identificador y contraseña vacíos: 400 con un error por cada campo en details. El servicio no se llama.
     @Test
     void loginWithBlankFieldsReturns400WithDetails() throws Exception {
         mockMvc.perform(post("/api/auth/login")
@@ -88,6 +109,7 @@ class AuthControllerTest {
         verify(authService, never()).login(any());
     }
 
+    // Cuerpo "{}" (faltan campos obligatorios): 400.
     @Test
     void loginWithMissingBodyFieldsReturns400() throws Exception {
         mockMvc.perform(post("/api/auth/login")
@@ -96,6 +118,8 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.error").value("Bad Request"));
     }
 
+    // Credenciales malas: 401 con el JSON estándar. Comprueba además que la respuesta NO contiene la contraseña ni el nombre
+    // de la excepción interna.
     @Test
     void badCredentialsReturnGeneric401WithErrorResponse() throws Exception {
         when(authService.login(any(LoginRequest.class)))
@@ -113,6 +137,7 @@ class AuthControllerTest {
     }
 
     // ---------------------------------------------------------------- me
+    // /me sin autenticación: 401, y el servicio nunca se invoca.
     @Test
     void meWithoutTokenReturns401() throws Exception {
         mockMvc.perform(get("/api/auth/me"))
@@ -123,6 +148,8 @@ class AuthControllerTest {
         verify(authService, never()).me(any());
     }
 
+    // with(user(principal)) simula un usuario autenticado con un SecurityPrincipal real. /me devuelve sus datos y roles
+    // y la respuesta NO contiene ni contraseña ni hash.
     @Test
     void meWithPrincipalReturns200WithoutSecrets() throws Exception {
         SecurityPrincipal principal = new SecurityPrincipal(7L, "andrea", "andrea@mail.com",
@@ -141,6 +168,8 @@ class AuthControllerTest {
     }
 
     // ------------------------------------------- regresión del Paso 15 (403 ≠ 500)
+    // Regresión: un AccessDeniedException lanzado dentro del controlador o servicio (lo que hace @PreAuthorize) debe
+    // responder 403 en JSON y no un 500. Lo resuelve el handler de AccessDeniedException de GlobalExceptionHandler.
     @Test
     void accessDeniedThrownInsideControllerReturns403NotHttp500() throws Exception {
         when(authService.login(any(LoginRequest.class)))

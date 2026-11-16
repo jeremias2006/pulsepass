@@ -39,6 +39,25 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+/**
+ * Prueba de la CAPA WEB (HTTP) del controlador, sin base de datos ni lógica de negocio real. Se envían peticiones HTTP simuladas
+ * con {@code MockMvc} y se comprueba la ruta, el código de respuesta, el JSON devuelto, las validaciones ({@code @Valid}) y cómo
+ * {@code GlobalExceptionHandler} traduce las excepciones.
+ *
+ * <ul>
+ *   <li>{@code @WebMvcTest}: levanta solo Spring MVC y seguridad, y únicamente el controlador indicado.</li>
+ *   <li>{@code @Import}: agrega lo que @WebMvcTest no carga solo: GlobalExceptionHandler, SecurityConfig y los manejadores de
+ *       errores 401/403.</li>
+ *   <li>{@code @MockitoBean}: reemplaza el servicio por un doble. {@code when(...).thenReturn(...)} o {@code thenThrow(...)} define
+ *       lo que "responde" el servicio, así solo se prueba el controlador. JwtService, CustomUserDetailsService y
+ *       AuthorizationService también se simulan: son dependencias de la seguridad y así el contexto arranca sin el resto de la aplicación.</li>
+ *   <li>{@code jsonPath("$.campo")}: lee un campo del JSON de respuesta. {@code verify(servicio, never())} demuestra que el
+ *       controlador rechazó la petición ANTES de llegar al servicio.</li>
+ * </ul>
+ *
+ * El registro (POST /api/users) es público y pasa por AuthService; las consultas por email y username exigen estar autenticado
+ * ({@code @WithMockUser}). La regla fina "solo el propio usuario o ADMIN" es un @PreAuthorize del servicio, que aquí está simulado.
+ */
 @WebMvcTest(UserController.class)
 @Import({GlobalExceptionHandler.class, SecurityConfig.class, SecurityErrorWriter.class,
         RestAuthenticationEntryPoint.class, RestAccessDeniedHandler.class})
@@ -60,6 +79,7 @@ class UserControllerTest {
     @MockitoBean
     private AuthorizationService authorizationService;
 
+    // Cuerpo JSON de registro válido; las pruebas de error lo modifican con replace(...).
     private static final String VALID_BODY = """
             {
               "username": "andrea",
@@ -73,6 +93,7 @@ class UserControllerTest {
             }
             """;
 
+    // Usuario de ejemplo que devuelve el servicio simulado.
     private UserResponse andrea() {
         return new UserResponse(
                 1L,
@@ -88,6 +109,7 @@ class UserControllerTest {
     }
 
     // TEST-CTRL-USR-001 / AC-CTRL007: registro válido -> 201
+    // Registro válido: 201 Created con los datos del usuario, y se llamó a authService.register.
     @Test
     void shouldRegisterUser() throws Exception {
         when(authService.register(any(RegisterUserRequest.class))).thenReturn(andrea());
@@ -106,6 +128,7 @@ class UserControllerTest {
     }
 
     // phone y city son opcionales: sin ellos también es válido
+    // Teléfono y ciudad son opcionales: sin ellos el registro sigue siendo válido (201).
     @Test
     void shouldRegisterUserWithoutOptionalFields() throws Exception {
         when(authService.register(any(RegisterUserRequest.class))).thenReturn(andrea());
@@ -128,6 +151,7 @@ class UserControllerTest {
     }
 
     // TEST-CTRL-USR-002: email inválido -> 400, Service nunca invocado
+    // Email con formato inválido: 400 "Validation failed" y details.email con el motivo. El servicio nunca se invoca.
     @Test
     void shouldReturn400WhenEmailIsInvalid() throws Exception {
         mockMvc.perform(post("/api/users")
@@ -143,6 +167,7 @@ class UserControllerTest {
     }
 
     // Extra: body vacío -> todos los obligatorios en details
+    // Cuerpo vacío: 400 y details trae un mensaje por cada campo obligatorio faltante.
     @Test
     void shouldReturn400WhenRequiredFieldsAreMissing() throws Exception {
         mockMvc.perform(post("/api/users")
@@ -159,6 +184,7 @@ class UserControllerTest {
     }
 
     // Extra: JSON mal formado -> 400
+    // JSON roto: 400 con el mensaje genérico "Malformed or invalid JSON request".
     @Test
     void shouldReturn400WhenJsonIsMalformed() throws Exception {
         mockMvc.perform(post("/api/users")
@@ -171,6 +197,8 @@ class UserControllerTest {
     }
 
     // TEST-CTRL-USR-003 / AC-CTRL008: username duplicado -> 409 sin detalles internos
+    // Username repetido (BR-USER-001): el servicio lanza DuplicateResourceException -> 409. Comprueba que el cuerpo no contiene
+    // la palabra "Exception" (no se filtran nombres de clases internas).
     @Test
     void shouldReturn409WhenUsernameAlreadyExists() throws Exception {
         when(authService.register(any(RegisterUserRequest.class)))
@@ -188,6 +216,7 @@ class UserControllerTest {
     }
 
     // Extra: email duplicado -> 409
+    // Email repetido (BR-USER-002): 409 con el mensaje de la excepción.
     @Test
     void shouldReturn409WhenEmailAlreadyExists() throws Exception {
         when(authService.register(any(RegisterUserRequest.class)))
@@ -201,6 +230,7 @@ class UserControllerTest {
     }
 
     // Extra: fecha de nacimiento futura la rechaza el Service (regla de negocio) -> 409
+    // Fecha de nacimiento futura: es una regla de negocio del servicio (BR-USER-005), no del controlador -> 409.
     @Test
     void shouldReturn409WhenBirthDateIsInTheFuture() throws Exception {
         when(authService.register(any(RegisterUserRequest.class)))
@@ -215,6 +245,7 @@ class UserControllerTest {
     }
 
     // TEST-CTRL-USR-004: consultar por email -> 200
+    // Consulta por email (usuario autenticado): 200 y se pasa el email al servicio.
     @Test
     @WithMockUser
     void shouldReturnUserByEmail() throws Exception {
@@ -228,6 +259,7 @@ class UserControllerTest {
     }
 
     // FR-CTRLUSR-002: email inexistente -> 404
+    // Email inexistente: 404 con el mensaje del servicio.
     @Test
     @WithMockUser
     void shouldReturn404WhenEmailDoesNotExist() throws Exception {
@@ -240,6 +272,7 @@ class UserControllerTest {
     }
 
     // Extra: falta ?email= -> 400 (no 500)
+    // Falta el parámetro ?email=: 400 (no 500) y details.email lo indica. El servicio nunca se invoca.
     @Test
     @WithMockUser
     void shouldReturn400WhenEmailParamIsMissing() throws Exception {
@@ -251,6 +284,7 @@ class UserControllerTest {
     }
 
     // TEST-CTRL-USR-005: consultar por username -> 200
+    // Consulta por username: 200 y se pasa el username al servicio.
     @Test
     @WithMockUser
     void shouldReturnUserByUsername() throws Exception {
@@ -264,6 +298,7 @@ class UserControllerTest {
     }
 
     // FR-CTRLUSR-003: username inexistente -> 404
+    // Username inexistente: 404.
     @Test
     @WithMockUser
     void shouldReturn404WhenUsernameDoesNotExist() throws Exception {
@@ -275,6 +310,7 @@ class UserControllerTest {
     }
 
     // Password demasiado corta (< 12) -> 400, AuthService nunca invocado
+    // Contraseña de menos de 12 caracteres: 400 con el mensaje de validación del campo password.
     @Test
     void shouldReturn400WhenPasswordIsTooShort() throws Exception {
         mockMvc.perform(post("/api/users")
@@ -289,6 +325,8 @@ class UserControllerTest {
     }
 
     // 40 caracteres "ñ" = 80 bytes: pasa @Size (caracteres) pero excede el límite de BCrypt -> 400
+    // La "ñ" ocupa 2 bytes en UTF-8: 40 caracteres son 80 bytes. Cumple el máximo de 72 CARACTERES (@Size) pero excede los
+    // 72 BYTES que BCrypt admite, y la validación @AssertTrue del request lo rechaza con 400.
     @Test
     void shouldReturn400WhenPasswordExceedsBcryptBytes() throws Exception {
         String passwordOver72Bytes = "ñ".repeat(40);
