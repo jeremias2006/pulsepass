@@ -28,12 +28,33 @@ import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+/**
+ * Prueba de INTEGRACIÓN de la persistencia contra un PostgreSQL real en Docker (Testcontainers). No hay dobles: se ejercitan de
+ * verdad las migraciones de Flyway, las entidades JPA, los repositorios y las restricciones de la base (UNIQUE, CHECK, claves).
+ *
+ * <ul>
+ *   <li>{@code @Testcontainers} + {@code @Container}: ciclo de vida del contenedor Docker.</li>
+ *   <li>{@code @SpringBootTest}: carga el contexto completo de la aplicación. {@code @ActiveProfiles("test")}: usa application-test.properties.</li>
+ *   <li>{@code @Transactional}: cada prueba corre dentro de una transacción que se REVIERTE al terminar, así los datos que crea
+ *       {@code seedScenario} no se acumulan ni se interfieren entre pruebas.</li>
+ *   <li>{@code seedScenario}: arma el escenario base (2 recintos, 4 eventos, artistas de V2, 4 usuarios y 4 tickets) antes de cada prueba.</li>
+ *   <li>{@code flushAndClear}: flush() envía a la base los cambios pendientes y clear() vacía la caché de Hibernate; así lo que
+ *       se lee después viene realmente de la BASE y no de objetos que ya estaban en memoria.</li>
+ *   <li>Las pruebas de restricciones usan {@code saveAndFlush} para forzar el INSERT de inmediato y que la base rechace el dato
+ *       dentro de la propia prueba ({@code assertThrows}).</li>
+ * </ul>
+ *
+ * Los códigos QT-0XX, AC-0XX, FR-... y NFR-... son identificadores de los requisitos y casos de prueba del proyecto.
+ */
 @Testcontainers
 @SpringBootTest
 @ActiveProfiles("test")
 @Transactional
 class PersistenceIntegrationTest {
 
+    // Contenedor Docker con PostgreSQL REAL, compartido por todas las pruebas de esta clase (static). @Container lo
+    // arranca y lo detiene; @ServiceConnection configura el DataSource de Spring para que apunte a él, sin escribir
+    // url ni credenciales. Flyway aplica las migraciones en esa base vacía. Requiere Docker en ejecución.
     @Container
     @ServiceConnection
     static PostgreSQLContainer postgres =
@@ -57,6 +78,7 @@ class PersistenceIntegrationTest {
     @PersistenceContext
     private EntityManager entityManager;
 
+    // Fecha de referencia: los eventos del escenario se definen relativos a hoy (+1, +2, +3, +5 meses) para que siempre sean futuros.
     private static final LocalDate HOY = LocalDate.now();
 
     private Venue marina;
@@ -73,6 +95,8 @@ class PersistenceIntegrationTest {
     private User laura;
     private User miguel;
 
+    // Escenario base: venues Marina (5000) y Arena Norte (12000); eventos CMF-2026 y SLR-2026 (PUBLISHED), DRF-2026 (DRAFT) y
+    // CNL-2026 (CANCELLED); y tickets PAID, PAID, RESERVED y CANCELLED. Solo Andrea tiene perfil.
     @BeforeEach
     void seedScenario() {
         solarBeat = artistRepository.findByStageName("Solar Beat").orElseThrow();
@@ -129,11 +153,13 @@ class PersistenceIntegrationTest {
         flushAndClear();
     }
 
+    // Envía los cambios pendientes a la base y vacía la caché de primer nivel de Hibernate (ver la explicación de la clase).
     private void flushAndClear() {
         entityManager.flush();
         entityManager.clear();
     }
 
+    // Extrae un texto de cada elemento y lo ordena, para comparar listas sin depender del orden en que la base las devuelva.
     private static <T> List<String> codes(List<T> items, Function<T, String> extractor) {
         return items.stream().map(extractor).sorted().toList();
     }
@@ -142,6 +168,7 @@ class PersistenceIntegrationTest {
     // QT-001 / QT-002: Flyway y validación del esquema
     // ---------------------------------------------------------------------
 
+    // Consulta con SQL nativo la tabla flyway_schema_history (donde Flyway registra cada migración aplicada) y espera exactamente 1, 2, 3 y 4.
     @Test
     @DisplayName("QT-001: Flyway aplica V1, V2, V3 y V4 sobre una base vacía")
     void flywayAplicaTodasLasMigraciones() {
@@ -166,6 +193,7 @@ class PersistenceIntegrationTest {
                 "Faltan artistas de la migración V2: " + nombres);
     }
 
+    // Confirma la propiedad ddl-auto=validate: el esquema lo crea Flyway, no Hibernate.
     @Test
     @DisplayName("QT-002: Hibernate valida el esquema, no lo crea ni lo actualiza")
     void hibernateSoloValidaElEsquema() {
@@ -173,6 +201,7 @@ class PersistenceIntegrationTest {
         assertTrue(venueRepository.count() > 0);
     }
 
+    // Guarda y vuelve a leer streaming_url (columna agregada por V3), tras limpiar la caché, para probar que se persiste de verdad.
     @Test
     @DisplayName("QT-001 / FR-EVT-006: la columna streaming_url de V3 existe y es persistible")
     void v3AgregaStreamingUrl() {
@@ -199,6 +228,7 @@ class PersistenceIntegrationTest {
         assertTrue(venue.getCapacity() > 0);
     }
 
+    // Navega el lado 1:N: venue.getEvents() carga desde la base los 3 eventos de Marina.
     @Test
     @DisplayName("QT-003: un venue agrupa varios eventos (lado 1:N)")
     void venueTieneVariosEventos() {
@@ -208,6 +238,7 @@ class PersistenceIntegrationTest {
                 codes(venue.getEvents(), Event::getEventCode));
     }
 
+    // Navega el lado N:1: del evento a su recinto (relación LAZY, leída dentro de la transacción del test).
     @Test
     @DisplayName("QT-003 / AC-002: el evento se recupera por eventCode junto con su venue (lado N:1)")
     void eventoSeRecuperaConSuVenue() {
@@ -234,6 +265,7 @@ class PersistenceIntegrationTest {
         assertEquals(user.getId(), perfil.getUser().getId());
     }
 
+    // user_profiles.user_id es UNIQUE: un segundo perfil para el mismo usuario hace que PostgreSQL rechace el INSERT.
     @Test
     @DisplayName("QT-004 / AC-004: la FK UNIQUE impide asociar un segundo perfil al mismo usuario")
     void segundoPerfilParaElMismoUsuarioViolaLaRestriccion() {
@@ -269,6 +301,7 @@ class PersistenceIntegrationTest {
                 codes(List.copyOf(artista.getEvents()), Event::getEventCode));
     }
 
+    // El Set evita el duplicado en Java; el conteo con SQL nativo confirma que en event_artists siguen 3 filas.
     @Test
     @DisplayName("QT-005 / AC-003: agregar dos veces el mismo artista no duplica la asociación (nivel Java)")
     void agregarDosVecesElMismoArtistaNoDuplicaLaAsociacion() {
@@ -287,6 +320,8 @@ class PersistenceIntegrationTest {
         assertEquals(3L, filas.longValue());
     }
 
+    // Inserta con SQL nativo un par (evento, artista) ya existente: la clave primaria compuesta lo rechaza. Se usa el EntityManager
+    // directamente, por eso la excepción es PersistenceException de JPA y no la DataIntegrityViolationException de Spring.
     @Test
     @DisplayName("QT-009 / FR-ART-003: la PK compuesta de event_artists rechaza un par evento-artista duplicado")
     void pkCompuestaRechazaParEventoArtistaDuplicado() {
@@ -303,6 +338,7 @@ class PersistenceIntegrationTest {
     // QT-006: Ticket -> User y Ticket -> Event
     // ---------------------------------------------------------------------
 
+    // Del ticket al usuario y al evento. Usa findByUserEmail (hoy solo lo invocan las pruebas). compareTo evita problemas de escala en el BigDecimal.
     @Test
     @DisplayName("QT-006: cada ticket navega hacia su usuario y su evento")
     void ticketNavegaHaciaUsuarioYEvento() {
@@ -326,6 +362,7 @@ class PersistenceIntegrationTest {
         assertEquals(List.of("TCK-0002"), codes(user.getTickets(), Ticket::getTicketCode));
     }
 
+    // SQL nativo directo sobre la tabla: el estado está guardado como el texto "PAID" (@Enumerated(STRING)), no como un número.
     @Test
     @DisplayName("BR-008 / FR-TKT-005: los enums se persisten por nombre, no por ordinal")
     void enumsSePersistenComoTexto() {
@@ -357,6 +394,7 @@ class PersistenceIntegrationTest {
         assertEquals("andrea", user.get().getUsername());
     }
 
+    // Solo vienen PUBLISHED (no el borrador ni el cancelado) y en orden de fecha ascendente.
     @Test
     @DisplayName("QT-007 / AC-006: findByStatusOrderByEventDateAsc trae solo PUBLISHED y ordenados (FR-EVT-005)")
     void queryMethodEventosPublicadosOrdenados() {
@@ -409,6 +447,7 @@ class PersistenceIntegrationTest {
     // QT-008: JPQL (JOIN y COUNT)
     // ---------------------------------------------------------------------
 
+    // Solar Beat está en 2 eventos: el JOIN con DISTINCT devuelve cada evento una sola vez.
     @Test
     @DisplayName("QT-008 / AC-007: JPQL con JOIN — eventos por artista, sin duplicados (FR-SRC-001)")
     void jpqlEventosPorArtistaSinDuplicados() {
@@ -419,6 +458,7 @@ class PersistenceIntegrationTest {
         assertEquals(encontrados.size(), encontrados.stream().distinct().count());
     }
 
+    // JPQL que cruza dos asociaciones (venue y artists): filtra por la ciudad del recinto Y por el artista.
     @Test
     @DisplayName("QT-008: JPQL con dos asociaciones — eventos por ciudad + artista (FR-SRC-002)")
     void jpqlEventosPorCiudadYArtista() {
@@ -433,6 +473,7 @@ class PersistenceIntegrationTest {
         assertTrue(eventRepository.findByCityAndArtistStageName("Santa Marta", "Ocean Drive").isEmpty());
     }
 
+    // Búsqueda por fecha, ciudad y texto del artista: sin distinguir mayúsculas, coincidencia parcial y solo eventos PUBLISHED.
     @Test
     @DisplayName("QT-008: JPQL compleja — eventos recomendados, case-insensitive y parcial (FR-SRC-003)")
     void jpqlEventosRecomendados() {
@@ -445,6 +486,7 @@ class PersistenceIntegrationTest {
                 .findRecommendedEvents(HOY.plusYears(1), "santa marta", "solar").isEmpty());
     }
 
+    // "a" coincide con los tres artistas del evento; sin DISTINCT el evento saldría tres veces.
     @Test
     @DisplayName("QT-008 / FR-SRC-003: DISTINCT evita duplicar un evento cuando varios artistas coinciden")
     void jpqlRecomendadosNoDuplicaEventoConVariosArtistasCoincidentes() {
@@ -454,6 +496,7 @@ class PersistenceIntegrationTest {
         assertEquals(List.of("CMF-2026"), codes(recomendados, Event::getEventCode));
     }
 
+    // COUNT con JPQL: solo cuentan los tickets PAID (CMF-2026 tiene 2 PAID, 1 RESERVED y 1 CANCELLED).
     @Test
     @DisplayName("QT-008 / AC-008: JPQL con COUNT — solo los tickets PAID participan del conteo (FR-TKT-008)")
     void jpqlConteoDeTicketsPagados() {
@@ -465,6 +508,7 @@ class PersistenceIntegrationTest {
     // QT-009 / NFR-001: constraints reales en PostgreSQL
     // ---------------------------------------------------------------------
 
+    // Restricción UNIQUE de tickets.ticket_code: PostgreSQL rechaza el segundo ticket con el mismo código.
     @Test
     @DisplayName("QT-009 / AC-005: ticketCode duplicado — PostgreSQL rechaza el segundo registro")
     void ticketCodeDuplicadoViolaUnique() {
@@ -496,6 +540,7 @@ class PersistenceIntegrationTest {
                 () -> userRepository.saveAndFlush(new User("andrea", "otro@pulsepass.com")));
     }
 
+    // CHECK (capacity > 0): PostgreSQL rechaza un recinto con capacidad 0.
     @Test
     @DisplayName("NFR-001 / FR-VEN-003: CHECK capacity > 0 — PostgreSQL rechaza capacidad cero")
     void capacidadNoPositivaViolaCheck() {
@@ -505,6 +550,7 @@ class PersistenceIntegrationTest {
                 () -> venueRepository.saveAndFlush(invalido));
     }
 
+    // CHECK (price >= 0): PostgreSQL rechaza un precio negativo (respalda BR-TICKET-009 en la propia base).
     @Test
     @DisplayName("NFR-001 / FR-TKT-003: CHECK price >= 0 — PostgreSQL rechaza precios negativos")
     void precioNegativoViolaCheck() {
@@ -518,6 +564,7 @@ class PersistenceIntegrationTest {
                 () -> ticketRepository.saveAndFlush(invalido));
     }
 
+    // SQL nativo con un status inexistente ("BANANA"): el CHECK del catálogo de estados lo rechaza.
     @Test
     @DisplayName("NFR-001 / FR-EVT-003: PostgreSQL rechaza un status fuera del catálogo")
     void estadoInvalidoDeEventoViolaCheck() {
