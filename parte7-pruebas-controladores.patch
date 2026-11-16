@@ -1,0 +1,856 @@
+From 5c10337247ffc80cae710340845609c08df5f3ec Mon Sep 17 00:00:00 2001
+From: Estudiante PulsePass <estudiante@example.com>
+Date: Sun, 15 Nov 2026 14:31:58 +0000
+Subject: [PATCH] docs(tests): comenta pruebas de controladores (parte 7)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Agrega Javadoc de clase (@WebMvcTest, MockMvc, @MockitoBean, jsonPath) y un
+comentario por prueba con el código HTTP y la regla que verifica.
+Solo comentarios: ningún cambio de comportamiento.
+---
+ .../controller/ArtistControllerTest.java      | 25 +++++++++++
+ .../controller/AuthControllerTest.java        | 29 +++++++++++++
+ .../controller/EventControllerTest.java       | 42 +++++++++++++++++++
+ .../RoutingErrorsControllerTest.java          |  5 +++
+ .../controller/TicketControllerTest.java      | 37 ++++++++++++++++
+ .../controller/UserControllerTest.java        | 38 +++++++++++++++++
+ .../controller/VenueControllerTest.java       | 24 +++++++++++
+ 7 files changed, 200 insertions(+)
+
+diff --git a/src/test/java/com/pulsepass/controller/ArtistControllerTest.java b/src/test/java/com/pulsepass/controller/ArtistControllerTest.java
+index e2eb8c2..f923c6a 100644
+--- a/src/test/java/com/pulsepass/controller/ArtistControllerTest.java
++++ b/src/test/java/com/pulsepass/controller/ArtistControllerTest.java
+@@ -30,6 +30,24 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
+ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+ 
++/**
++ * Prueba de la CAPA WEB (HTTP) del controlador, sin base de datos ni lógica de negocio real. Se envían peticiones HTTP simuladas
++ * con {@code MockMvc} y se comprueba la ruta, el código de respuesta, el JSON devuelto, las validaciones ({@code @Valid}) y cómo
++ * {@code GlobalExceptionHandler} traduce las excepciones.
++ *
++ * <ul>
++ *   <li>{@code @WebMvcTest}: levanta solo Spring MVC y seguridad, y únicamente el controlador indicado.</li>
++ *   <li>{@code @Import}: agrega lo que @WebMvcTest no carga solo: GlobalExceptionHandler, SecurityConfig y los manejadores de
++ *       errores 401/403.</li>
++ *   <li>{@code @MockitoBean}: reemplaza el servicio por un doble. {@code when(...).thenReturn(...)} o {@code thenThrow(...)} define
++ *       lo que "responde" el servicio, así solo se prueba el controlador. JwtService, CustomUserDetailsService y
++ *       AuthorizationService también se simulan: son dependencias de la seguridad y así el contexto arranca sin el resto de la aplicación.</li>
++ *   <li>{@code jsonPath("$.campo")}: lee un campo del JSON de respuesta. {@code verify(servicio, never())} demuestra que el
++ *       controlador rechazó la petición ANTES de llegar al servicio.</li>
++ * </ul>
++ *
++ * Las rutas de artistas son públicas: las pruebas se hacen sin usuario autenticado.
++ */
+ @WebMvcTest(ArtistController.class)
+ @Import({GlobalExceptionHandler.class, SecurityConfig.class, SecurityErrorWriter.class,
+         RestAuthenticationEntryPoint.class, RestAccessDeniedHandler.class})
+@@ -48,11 +66,13 @@ class ArtistControllerTest {
+     @MockitoBean
+     private AuthorizationService authorizationService;
+ 
++    // Artista de ejemplo que devuelve el servicio simulado.
+     private ArtistResponse solarBeat() {
+         return new ArtistResponse(1L, "Solar Beat", true);
+     }
+ 
+     // TEST-CTRL-ART-001: buscar por ID -> 200
++    // Respuesta 200 con JSON y los tres campos del artista. verify comprueba que el controlador llamó al servicio con id 1.
+     @Test
+     void shouldReturnArtistById() throws Exception {
+         when(artistService.findById(1L)).thenReturn(solarBeat());
+@@ -68,6 +88,7 @@ class ArtistControllerTest {
+     }
+ 
+     // TEST-CTRL-ART-002: ID inexistente -> 404
++    // El servicio lanza ResourceNotFoundException y GlobalExceptionHandler la convierte en 404 con el JSON estándar de error.
+     @Test
+     void shouldReturn404WhenArtistIdDoesNotExist() throws Exception {
+         when(artistService.findById(99L))
+@@ -81,6 +102,7 @@ class ArtistControllerTest {
+     }
+ 
+     // Extra: id no numérico -> 400, Service nunca invocado
++    // "abc" no se puede convertir a Long: 400 y details.id indica qué parámetro falló. El servicio nunca se invoca.
+     @Test
+     void shouldReturn400WhenArtistIdIsNotNumeric() throws Exception {
+         mockMvc.perform(get("/api/artists/{id}", "abc"))
+@@ -92,6 +114,7 @@ class ArtistControllerTest {
+     }
+ 
+     // TEST-CTRL-ART-003: buscar por stageName -> 200
++    // ?stageName= se pasa tal cual al servicio y se devuelve el artista (200).
+     @Test
+     void shouldReturnArtistByStageName() throws Exception {
+         when(artistService.findByStageName("Solar Beat")).thenReturn(solarBeat());
+@@ -104,6 +127,7 @@ class ArtistControllerTest {
+     }
+ 
+     // FR-CTRLART-002: stageName inexistente -> 404
++    // Nombre artístico inexistente: el servicio lanza la excepción y el cliente recibe 404.
+     @Test
+     void shouldReturn404WhenStageNameDoesNotExist() throws Exception {
+         when(artistService.findByStageName("Nadie"))
+@@ -115,6 +139,7 @@ class ArtistControllerTest {
+     }
+ 
+     // TEST-CTRL-ART-004: activos -> 200
++    // La lista de activos responde 200. Además verifica que "/active" NO se tomó como {id} (findById nunca se llama).
+     @Test
+     void shouldReturnActiveArtists() throws Exception {
+         when(artistService.findActiveArtists()).thenReturn(List.of(solarBeat()));
+diff --git a/src/test/java/com/pulsepass/controller/AuthControllerTest.java b/src/test/java/com/pulsepass/controller/AuthControllerTest.java
+index 97ccc9e..4df691d 100644
+--- a/src/test/java/com/pulsepass/controller/AuthControllerTest.java
++++ b/src/test/java/com/pulsepass/controller/AuthControllerTest.java
+@@ -39,6 +39,24 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
+ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+ 
++/**
++ * Prueba de la CAPA WEB (HTTP) del controlador, sin base de datos ni lógica de negocio real. Se envían peticiones HTTP simuladas
++ * con {@code MockMvc} y se comprueba la ruta, el código de respuesta, el JSON devuelto, las validaciones ({@code @Valid}) y cómo
++ * {@code GlobalExceptionHandler} traduce las excepciones.
++ *
++ * <ul>
++ *   <li>{@code @WebMvcTest}: levanta solo Spring MVC y seguridad, y únicamente el controlador indicado.</li>
++ *   <li>{@code @Import}: agrega lo que @WebMvcTest no carga solo: GlobalExceptionHandler, SecurityConfig y los manejadores de
++ *       errores 401/403.</li>
++ *   <li>{@code @MockitoBean}: reemplaza el servicio por un doble. {@code when(...).thenReturn(...)} o {@code thenThrow(...)} define
++ *       lo que "responde" el servicio, así solo se prueba el controlador. JwtService, CustomUserDetailsService y
++ *       AuthorizationService también se simulan: son dependencias de la seguridad y así el contexto arranca sin el resto de la aplicación.</li>
++ *   <li>{@code jsonPath("$.campo")}: lee un campo del JSON de respuesta. {@code verify(servicio, never())} demuestra que el
++ *       controlador rechazó la petición ANTES de llegar al servicio.</li>
++ * </ul>
++ *
++ * /login es público; /me exige estar autenticado. AuthService es el doble que simula el inicio de sesión.
++ */
+ @WebMvcTest(AuthController.class)
+ @Import({GlobalExceptionHandler.class, SecurityConfig.class, SecurityErrorWriter.class,
+         RestAuthenticationEntryPoint.class, RestAccessDeniedHandler.class})
+@@ -58,10 +76,12 @@ class AuthControllerTest {
+     @MockitoBean
+     private AuthorizationService authorizationService;
+ 
++    // Cuerpo JSON de login válido, reutilizado por varias pruebas (bloque de texto """ ... """).
+     private static final String LOGIN_BODY = """
+             {"identifier":"andrea","password":"UnaFraseSeguraLarga2026!"}""";
+ 
+     // ---------------------------------------------------------------- login
++    // Login correcto: 200 con accessToken, tokenType "Bearer" y expiresIn 900 (15 minutos).
+     @Test
+     void loginReturns200WithBearerToken() throws Exception {
+         when(authService.login(any(LoginRequest.class)))
+@@ -75,6 +95,7 @@ class AuthControllerTest {
+                 .andExpect(jsonPath("$.expiresIn").value(900));
+     }
+ 
++    // Identificador y contraseña vacíos: 400 con un error por cada campo en details. El servicio no se llama.
+     @Test
+     void loginWithBlankFieldsReturns400WithDetails() throws Exception {
+         mockMvc.perform(post("/api/auth/login")
+@@ -88,6 +109,7 @@ class AuthControllerTest {
+         verify(authService, never()).login(any());
+     }
+ 
++    // Cuerpo "{}" (faltan campos obligatorios): 400.
+     @Test
+     void loginWithMissingBodyFieldsReturns400() throws Exception {
+         mockMvc.perform(post("/api/auth/login")
+@@ -96,6 +118,8 @@ class AuthControllerTest {
+                 .andExpect(jsonPath("$.error").value("Bad Request"));
+     }
+ 
++    // Credenciales malas: 401 con el JSON estándar. Comprueba además que la respuesta NO contiene la contraseña ni el nombre
++    // de la excepción interna.
+     @Test
+     void badCredentialsReturnGeneric401WithErrorResponse() throws Exception {
+         when(authService.login(any(LoginRequest.class)))
+@@ -113,6 +137,7 @@ class AuthControllerTest {
+     }
+ 
+     // ---------------------------------------------------------------- me
++    // /me sin autenticación: 401, y el servicio nunca se invoca.
+     @Test
+     void meWithoutTokenReturns401() throws Exception {
+         mockMvc.perform(get("/api/auth/me"))
+@@ -123,6 +148,8 @@ class AuthControllerTest {
+         verify(authService, never()).me(any());
+     }
+ 
++    // with(user(principal)) simula un usuario autenticado con un SecurityPrincipal real. /me devuelve sus datos y roles
++    // y la respuesta NO contiene ni contraseña ni hash.
+     @Test
+     void meWithPrincipalReturns200WithoutSecrets() throws Exception {
+         SecurityPrincipal principal = new SecurityPrincipal(7L, "andrea", "andrea@mail.com",
+@@ -141,6 +168,8 @@ class AuthControllerTest {
+     }
+ 
+     // ------------------------------------------- regresión del Paso 15 (403 ≠ 500)
++    // Regresión: un AccessDeniedException lanzado dentro del controlador o servicio (lo que hace @PreAuthorize) debe
++    // responder 403 en JSON y no un 500. Lo resuelve el handler de AccessDeniedException de GlobalExceptionHandler.
+     @Test
+     void accessDeniedThrownInsideControllerReturns403NotHttp500() throws Exception {
+         when(authService.login(any(LoginRequest.class)))
+diff --git a/src/test/java/com/pulsepass/controller/EventControllerTest.java b/src/test/java/com/pulsepass/controller/EventControllerTest.java
+index 9585fdc..0d5bc75 100644
+--- a/src/test/java/com/pulsepass/controller/EventControllerTest.java
++++ b/src/test/java/com/pulsepass/controller/EventControllerTest.java
+@@ -42,6 +42,25 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
+ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+ 
++/**
++ * Prueba de la CAPA WEB (HTTP) del controlador, sin base de datos ni lógica de negocio real. Se envían peticiones HTTP simuladas
++ * con {@code MockMvc} y se comprueba la ruta, el código de respuesta, el JSON devuelto, las validaciones ({@code @Valid}) y cómo
++ * {@code GlobalExceptionHandler} traduce las excepciones.
++ *
++ * <ul>
++ *   <li>{@code @WebMvcTest}: levanta solo Spring MVC y seguridad, y únicamente el controlador indicado.</li>
++ *   <li>{@code @Import}: agrega lo que @WebMvcTest no carga solo: GlobalExceptionHandler, SecurityConfig y los manejadores de
++ *       errores 401/403.</li>
++ *   <li>{@code @MockitoBean}: reemplaza el servicio por un doble. {@code when(...).thenReturn(...)} o {@code thenThrow(...)} define
++ *       lo que "responde" el servicio, así solo se prueba el controlador. JwtService, CustomUserDetailsService y
++ *       AuthorizationService también se simulan: son dependencias de la seguridad y así el contexto arranca sin el resto de la aplicación.</li>
++ *   <li>{@code jsonPath("$.campo")}: lee un campo del JSON de respuesta. {@code verify(servicio, never())} demuestra que el
++ *       controlador rechazó la petición ANTES de llegar al servicio.</li>
++ * </ul>
++ *
++ * Crear, publicar y asignar artistas exigen rol ADMIN ({@code @WithMockUser(roles = "ADMIN")}); las consultas son públicas
++ * y se prueban sin usuario. La visibilidad por rol (qué eventos ve cada quien) la decide el servicio, aquí simulado.
++ */
+ @WebMvcTest(EventController.class)
+ @Import({GlobalExceptionHandler.class, SecurityConfig.class, SecurityErrorWriter.class,
+         RestAuthenticationEntryPoint.class, RestAccessDeniedHandler.class})
+@@ -61,6 +80,7 @@ class EventControllerTest {
+     @MockitoBean
+     private AuthorizationService authorizationService;
+ 
++    // Cuerpo JSON de creación de evento válido; las pruebas de error lo modifican con replace(...).
+     private static final String VALID_BODY = """
+             {
+               "eventCode": "CMF-2026",
+@@ -73,6 +93,7 @@ class EventControllerTest {
+             }
+             """;
+ 
++    // Evento de ejemplo (detalle completo) con el estado y los artistas dados.
+     private EventResponse event(EventStatus eventStatus, List<ArtistResponse> artists) {
+         return new EventResponse(
+                 1L,
+@@ -89,6 +110,7 @@ class EventControllerTest {
+         );
+     }
+ 
++    // Evento de ejemplo en versión resumida, para los listados.
+     private EventSummaryResponse summary() {
+         return new EventSummaryResponse(
+                 1L,
+@@ -102,6 +124,7 @@ class EventControllerTest {
+     }
+ 
+     // TEST-CTRL-EVT-001 / AC-CTRL003: POST válido -> 201
++    // Como ADMIN, creación válida: 201 Created con el evento en estado DRAFT.
+     @Test
+     @WithMockUser(roles = "ADMIN")
+     void shouldCreateEvent() throws Exception {
+@@ -123,6 +146,7 @@ class EventControllerTest {
+     }
+ 
+     // TEST-CTRL-EVT-002 / AC-CTRL004: POST inválido -> 400 + details, Service nunca invocado
++    // Código y recinto vacíos: 400 con details por campo. El servicio nunca se invoca.
+     @Test
+     @WithMockUser(roles = "ADMIN")
+     void shouldReturn400WhenEventRequestIsInvalid() throws Exception {
+@@ -151,6 +175,7 @@ class EventControllerTest {
+     }
+ 
+     // Extra: campos obligatorios ausentes (category, eventDate, minimumAge)
++    // Faltan categoría, fecha y edad mínima: 400 con un mensaje por cada una.
+     @Test
+     @WithMockUser(roles = "ADMIN")
+     void shouldReturn400WhenRequiredFieldsAreMissing() throws Exception {
+@@ -172,6 +197,7 @@ class EventControllerTest {
+     }
+ 
+     // Extra: minimumAge negativo -> 400 (valor mínimo es validación estructural)
++    // Edad mínima -1: la validación @Min la rechaza en el controlador (validación de forma) con 400.
+     @Test
+     @WithMockUser(roles = "ADMIN")
+     void shouldReturn400WhenMinimumAgeIsNegative() throws Exception {
+@@ -186,6 +212,7 @@ class EventControllerTest {
+     }
+ 
+     // Extra: categoría fuera del enum -> 400 (JSON inválido)
++    // Categoría que no existe en el enum: JSON inválido, 400 y details.body presente.
+     @Test
+     @WithMockUser(roles = "ADMIN")
+     void shouldReturn400WhenCategoryIsNotInEnum() throws Exception {
+@@ -201,6 +228,7 @@ class EventControllerTest {
+     }
+ 
+     // Extra: JSON mal formado -> 400
++    // JSON roto: 400.
+     @Test
+     @WithMockUser(roles = "ADMIN")
+     void shouldReturn400WhenJsonIsMalformed() throws Exception {
+@@ -214,6 +242,7 @@ class EventControllerTest {
+     }
+ 
+     // Extra: eventCode duplicado (DuplicateResourceException) -> 409
++    // BR-EVENT-001: código repetido -> DuplicateResourceException -> 409.
+     @Test
+     @WithMockUser(roles = "ADMIN")
+     void shouldReturn409WhenEventCodeAlreadyExists() throws Exception {
+@@ -230,6 +259,7 @@ class EventControllerTest {
+     }
+ 
+     // Extra: venue inexistente al crear -> 404
++    // BR-EVENT-002: el recinto no existe -> 404.
+     @Test
+     @WithMockUser(roles = "ADMIN")
+     void shouldReturn404WhenVenueDoesNotExistOnCreate() throws Exception {
+@@ -244,6 +274,7 @@ class EventControllerTest {
+     }
+ 
+     // Extra: venue inactivo / fecha pasada (BusinessRuleException) -> 409
++    // BR-EVENT-003: recinto inactivo -> 409.
+     @Test
+     @WithMockUser(roles = "ADMIN")
+     void shouldReturn409WhenVenueIsInactiveOnCreate() throws Exception {
+@@ -258,6 +289,7 @@ class EventControllerTest {
+     }
+ 
+     // TEST-CTRL-EVT-003: GET existente -> 200
++    // Consulta pública por código: 200 con los datos, incluido el nombre del recinto aplanado (venueName).
+     @Test
+     void shouldReturnEventByCode() throws Exception {
+         when(eventService.findByCode("CMF-2026"))
+@@ -273,6 +305,7 @@ class EventControllerTest {
+     }
+ 
+     // TEST-CTRL-EVT-004: GET inexistente -> 404
++    // Evento inexistente: 404 con el contrato estándar de error.
+     @Test
+     void shouldReturn404WhenEventDoesNotExist() throws Exception {
+         when(eventService.findByCode("CMF-2026"))
+@@ -286,6 +319,7 @@ class EventControllerTest {
+     }
+ 
+     // TEST-CTRL-EVT-005: publicados -> 200
++    // Lista pública de publicados (200). Verifica que "/published" no se tomó como {eventCode}.
+     @Test
+     void shouldReturnPublishedEvents() throws Exception {
+         when(eventService.findPublishedEvents()).thenReturn(List.of(summary()));
+@@ -303,6 +337,7 @@ class EventControllerTest {
+     }
+ 
+     // TEST-CTRL-EVT-006 / AC-CTRL005: publicar válido -> 200
++    // Como ADMIN, PATCH publish: 200 y el evento sale PUBLISHED.
+     @Test
+     @WithMockUser(roles = "ADMIN")
+     void shouldPublishEvent() throws Exception {
+@@ -318,6 +353,7 @@ class EventControllerTest {
+     }
+ 
+     // TEST-CTRL-EVT-007 / AC-CTRL006: publicar inválido -> 409
++    // BR-EVENT-007: solo se publica un DRAFT -> 409.
+     @Test
+     @WithMockUser(roles = "ADMIN")
+     void shouldReturn409WhenEventCannotBePublished() throws Exception {
+@@ -335,6 +371,7 @@ class EventControllerTest {
+     }
+ 
+     // TEST-CTRL-EVT-008: asociar artista -> 200
++    // Como ADMIN, asignar un artista: 200 y el evento trae la lista de artistas con el nuevo.
+     @Test
+     @WithMockUser(roles = "ADMIN")
+     void shouldAddArtistToEvent() throws Exception {
+@@ -352,6 +389,7 @@ class EventControllerTest {
+     }
+ 
+     // Extra: artista ya asociado / evento CANCELLED o FINISHED -> 409
++    // BR-EVENT-010: artista ya asignado -> 409.
+     @Test
+     @WithMockUser(roles = "ADMIN")
+     void shouldReturn409WhenArtistIsAlreadyAssigned() throws Exception {
+@@ -367,6 +405,7 @@ class EventControllerTest {
+     }
+ 
+     // Extra: artista inexistente -> 404
++    // El artista no existe: 404.
+     @Test
+     @WithMockUser(roles = "ADMIN")
+     void shouldReturn404WhenArtistDoesNotExist() throws Exception {
+@@ -379,6 +418,7 @@ class EventControllerTest {
+     }
+ 
+     // Extra: artistId no numérico -> 400, Service nunca invocado
++    // artistId no numérico: 400 "Invalid request parameter" con details.artistId. El servicio nunca se invoca.
+     @Test
+     @WithMockUser(roles = "ADMIN")
+     void shouldReturn400WhenArtistIdIsNotNumeric() throws Exception {
+@@ -391,6 +431,7 @@ class EventControllerTest {
+     }
+ 
+     // TEST-CTRL-EVT-009: buscar por artista -> 200
++    // Búsqueda pública por nombre artístico: 200 con la lista resumida.
+     @Test
+     void shouldReturnEventsByArtist() throws Exception {
+         when(eventService.findByArtist("Solar Beat")).thenReturn(List.of(summary()));
+@@ -404,6 +445,7 @@ class EventControllerTest {
+     }
+ 
+     // Extra: falta el parámetro stageName -> 400 (no 500)
++    // Falta el parámetro obligatorio stageName: 400 "Missing required parameter" (no 500).
+     @Test
+     void shouldReturn400WhenStageNameParamIsMissing() throws Exception {
+         mockMvc.perform(get("/api/events/by-artist"))
+diff --git a/src/test/java/com/pulsepass/controller/RoutingErrorsControllerTest.java b/src/test/java/com/pulsepass/controller/RoutingErrorsControllerTest.java
+index 886a22e..2cf5009 100644
+--- a/src/test/java/com/pulsepass/controller/RoutingErrorsControllerTest.java
++++ b/src/test/java/com/pulsepass/controller/RoutingErrorsControllerTest.java
+@@ -50,6 +50,7 @@ class RoutingErrorsControllerTest {
+     @MockitoBean
+     private AuthorizationService authorizationService;
+ 
++    // Usuario autenticado en una ruta que no existe: 404 con el contrato estándar de error (no una página de error ni un 500).
+     @Test
+     @WithMockUser(roles = "USER")
+     void unknownRouteReturns404WithErrorResponse() throws Exception {
+@@ -62,6 +63,7 @@ class RoutingErrorsControllerTest {
+                 .andExpect(jsonPath("$.details").isMap());
+     }
+ 
++    // Verbo no soportado (POST en una ruta solo GET): 405 con el JSON de error y la cabecera Allow que indica los permitidos.
+     @Test
+     @WithMockUser(roles = "USER")
+     void unsupportedVerbReturns405WithAllowHeader() throws Exception {
+@@ -74,6 +76,7 @@ class RoutingErrorsControllerTest {
+                 .andExpect(jsonPath("$.details").isMap());
+     }
+ 
++    // Content-Type text/plain en el login (se espera JSON): 415 Unsupported Media Type con el JSON estándar.
+     @Test
+     void wrongContentTypeOnLoginReturns415WithErrorResponse() throws Exception {
+         mockMvc.perform(post("/api/auth/login")
+@@ -84,6 +87,8 @@ class RoutingErrorsControllerTest {
+                 .andExpect(jsonPath("$.error").value("Unsupported Media Type"));
+     }
+ 
++    // Seguridad: un anónimo recibe 401 también en rutas inexistentes, así no puede distinguir qué rutas existen
++    // (por anyRequest().authenticated() de SecurityConfig).
+     @Test
+     void anonymousOnUnknownRouteStillGets401NotInfoAboutRoutes() throws Exception {
+         // anyRequest().authenticated(): un anónimo no puede distinguir rutas existentes de inexistentes
+diff --git a/src/test/java/com/pulsepass/controller/TicketControllerTest.java b/src/test/java/com/pulsepass/controller/TicketControllerTest.java
+index 518f011..4574cd5 100644
+--- a/src/test/java/com/pulsepass/controller/TicketControllerTest.java
++++ b/src/test/java/com/pulsepass/controller/TicketControllerTest.java
+@@ -40,6 +40,26 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
+ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+ 
++/**
++ * Prueba de la CAPA WEB (HTTP) del controlador, sin base de datos ni lógica de negocio real. Se envían peticiones HTTP simuladas
++ * con {@code MockMvc} y se comprueba la ruta, el código de respuesta, el JSON devuelto, las validaciones ({@code @Valid}) y cómo
++ * {@code GlobalExceptionHandler} traduce las excepciones.
++ *
++ * <ul>
++ *   <li>{@code @WebMvcTest}: levanta solo Spring MVC y seguridad, y únicamente el controlador indicado.</li>
++ *   <li>{@code @Import}: agrega lo que @WebMvcTest no carga solo: GlobalExceptionHandler, SecurityConfig y los manejadores de
++ *       errores 401/403.</li>
++ *   <li>{@code @MockitoBean}: reemplaza el servicio por un doble. {@code when(...).thenReturn(...)} o {@code thenThrow(...)} define
++ *       lo que "responde" el servicio, así solo se prueba el controlador. JwtService, CustomUserDetailsService y
++ *       AuthorizationService también se simulan: son dependencias de la seguridad y así el contexto arranca sin el resto de la aplicación.</li>
++ *   <li>{@code jsonPath("$.campo")}: lee un campo del JSON de respuesta. {@code verify(servicio, never())} demuestra que el
++ *       controlador rechazó la petición ANTES de llegar al servicio.</li>
++ * </ul>
++ *
++ * {@code @WithMockUser(roles = "USER")} a nivel de clase hace que todas las pruebas se ejecuten como un USER autenticado;
++ * las que requieren STAFF lo sobrescriben en el propio método. Las reglas de negocio (edad, cupo...) son del servicio, aquí simulado:
++ * estas pruebas solo verifican que sus excepciones se traducen al código HTTP correcto.
++ */
+ @WebMvcTest(TicketController.class)
+ @Import({GlobalExceptionHandler.class, SecurityConfig.class, SecurityErrorWriter.class,
+         RestAuthenticationEntryPoint.class, RestAccessDeniedHandler.class})
+@@ -60,6 +80,7 @@ class TicketControllerTest {
+     @MockitoBean
+     private AuthorizationService authorizationService;
+ 
++    // Cuerpo JSON de compra válido: NO incluye precio (lo calcula el servidor).
+     private static final String VALID_BODY = """
+             {
+               "userEmail": "andrea@mail.com",
+@@ -68,6 +89,7 @@ class TicketControllerTest {
+             }
+             """;
+ 
++    // Ticket de ejemplo con el estado indicado, que devuelve el servicio simulado.
+     private TicketResponse ticket(TicketStatus ticketStatus) {
+         return new TicketResponse(
+                 1L,
+@@ -83,6 +105,7 @@ class TicketControllerTest {
+     }
+ 
+     // TEST-CTRL-TKT-001 / AC-CTRL009: compra válida -> 201 + TicketResponse
++    // Compra válida: 201 Created con el ticket (código, tipo, estado PAID, email y evento).
+     @Test
+     void shouldPurchaseTicket() throws Exception {
+         when(ticketService.purchase(any(PurchaseTicketRequest.class)))
+@@ -103,6 +126,7 @@ class TicketControllerTest {
+     }
+ 
+     // TEST-CTRL-TKT-002: request inválido -> 400 + details, Service nunca invocado
++    // Email inválido, código vacío y tipo ausente: 400 con un mensaje por campo en details. El servicio nunca se invoca.
+     @Test
+     void shouldReturn400WhenPurchaseRequestIsInvalid() throws Exception {
+         mockMvc.perform(post("/api/tickets")
+@@ -124,6 +148,7 @@ class TicketControllerTest {
+     }
+ 
+     // Extra: tipo de ticket fuera del enum -> 400
++    // "PLATINUM" no existe en TicketType: el JSON no se puede convertir y responde 400 "Malformed or invalid JSON request".
+     @Test
+     void shouldReturn400WhenTicketTypeIsNotInEnum() throws Exception {
+         mockMvc.perform(post("/api/tickets")
+@@ -136,6 +161,7 @@ class TicketControllerTest {
+     }
+ 
+     // TEST-CTRL-TKT-003: usuario inexistente -> 404
++    // BR-TICKET-001: el servicio lanza ResourceNotFoundException -> 404.
+     @Test
+     void shouldReturn404WhenUserDoesNotExist() throws Exception {
+         when(ticketService.purchase(any(PurchaseTicketRequest.class)))
+@@ -151,6 +177,7 @@ class TicketControllerTest {
+     }
+ 
+     // TEST-CTRL-TKT-004 / AC-CTRL010: menor de edad (regla de Service) -> 409
++    // BR-TICKET-006: edad insuficiente. Es regla de negocio -> BusinessRuleException -> 409.
+     @Test
+     void shouldReturn409WhenUserDoesNotMeetMinimumAge() throws Exception {
+         when(ticketService.purchase(any(PurchaseTicketRequest.class)))
+@@ -169,6 +196,7 @@ class TicketControllerTest {
+     }
+ 
+     // Extra: usuario inactivo / evento no publicado / sin capacidad -> 409
++    // BR-TICKET-007: cupo agotado -> 409 con el mensaje de la regla.
+     @Test
+     void shouldReturn409WhenEventHasNoCapacityLeft() throws Exception {
+         when(ticketService.purchase(any(PurchaseTicketRequest.class)))
+@@ -182,6 +210,7 @@ class TicketControllerTest {
+     }
+ 
+     // TEST-CTRL-TKT-005: consultar ticket -> 200
++    // Consulta por código: 200 con el ticket y el nombre del evento.
+     @Test
+     void shouldReturnTicketByCode() throws Exception {
+         when(ticketService.findByCode("TKT-A1B2C3D4")).thenReturn(ticket(TicketStatus.PAID));
+@@ -195,6 +224,7 @@ class TicketControllerTest {
+     }
+ 
+     // FR-CTRLTKT-002: ticket inexistente -> 404
++    // Ticket inexistente: 404.
+     @Test
+     void shouldReturn404WhenTicketDoesNotExist() throws Exception {
+         when(ticketService.findByCode("TKT-NOPE"))
+@@ -206,6 +236,7 @@ class TicketControllerTest {
+     }
+ 
+     // TEST-CTRL-TKT-006: tickets por usuario -> 200
++    // Tickets de un usuario: 200 con una lista. Verifica que "/by-user" no se tomó como {ticketCode}.
+     @Test
+     void shouldReturnTicketsByUserEmail() throws Exception {
+         when(ticketService.findByUserEmail("andrea@mail.com"))
+@@ -222,6 +253,7 @@ class TicketControllerTest {
+     }
+ 
+     // Extra: falta ?email= -> 400 (no 500)
++    // Falta ?email=: 400 (no 500) y el servicio nunca se invoca.
+     @Test
+     void shouldReturn400WhenEmailParamIsMissing() throws Exception {
+         mockMvc.perform(get("/api/tickets/by-user"))
+@@ -232,6 +264,7 @@ class TicketControllerTest {
+     }
+ 
+     // TEST-CTRL-TKT-007: tickets PAID por evento -> 200
++    // Se ejecuta como STAFF (rol que exige esta ruta): 200 con los tickets PAID del evento.
+     @Test
+     @WithMockUser(roles = "STAFF")
+     void shouldReturnPaidTicketsByEvent() throws Exception {
+@@ -247,6 +280,7 @@ class TicketControllerTest {
+     }
+ 
+     // TEST-CTRL-TKT-008 / AC-CTRL011: cancelar ticket PAID -> 200
++    // Cancelar (PATCH): 200 y el ticket sale en estado CANCELLED.
+     @Test
+     void shouldCancelTicket() throws Exception {
+         when(ticketService.cancel("TKT-A1B2C3D4")).thenReturn(ticket(TicketStatus.CANCELLED));
+@@ -259,6 +293,7 @@ class TicketControllerTest {
+     }
+ 
+     // TEST-CTRL-TKT-009 / AC-CTRL012: cancelar ticket USED -> 409
++    // BR-TICKET-010/011: cancelar un ticket que no es PAID -> 409 con el mensaje de la regla.
+     @Test
+     void shouldReturn409WhenTicketCannotBeCancelled() throws Exception {
+         when(ticketService.cancel("TKT-A1B2C3D4"))
+@@ -273,6 +308,7 @@ class TicketControllerTest {
+     }
+ 
+     // TEST-CTRL-TKT-010 / AC-CTRL013: usar ticket PAID -> 200
++    // Se ejecuta como STAFF: marcar como usado devuelve 200 y el ticket en estado USED.
+     @Test
+     @WithMockUser(roles = "STAFF")
+     void shouldMarkTicketAsUsed() throws Exception {
+@@ -286,6 +322,7 @@ class TicketControllerTest {
+     }
+ 
+     // TEST-CTRL-TKT-011 / AC-CTRL014: usar ticket CANCELLED -> 409
++    // BR-TICKET-014: usar un ticket CANCELLED -> 409.
+     @Test
+     @WithMockUser(roles = "STAFF")
+     void shouldReturn409WhenTicketCannotBeUsed() throws Exception {
+diff --git a/src/test/java/com/pulsepass/controller/UserControllerTest.java b/src/test/java/com/pulsepass/controller/UserControllerTest.java
+index 0961864..67485ef 100644
+--- a/src/test/java/com/pulsepass/controller/UserControllerTest.java
++++ b/src/test/java/com/pulsepass/controller/UserControllerTest.java
+@@ -39,6 +39,25 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
+ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+ 
++/**
++ * Prueba de la CAPA WEB (HTTP) del controlador, sin base de datos ni lógica de negocio real. Se envían peticiones HTTP simuladas
++ * con {@code MockMvc} y se comprueba la ruta, el código de respuesta, el JSON devuelto, las validaciones ({@code @Valid}) y cómo
++ * {@code GlobalExceptionHandler} traduce las excepciones.
++ *
++ * <ul>
++ *   <li>{@code @WebMvcTest}: levanta solo Spring MVC y seguridad, y únicamente el controlador indicado.</li>
++ *   <li>{@code @Import}: agrega lo que @WebMvcTest no carga solo: GlobalExceptionHandler, SecurityConfig y los manejadores de
++ *       errores 401/403.</li>
++ *   <li>{@code @MockitoBean}: reemplaza el servicio por un doble. {@code when(...).thenReturn(...)} o {@code thenThrow(...)} define
++ *       lo que "responde" el servicio, así solo se prueba el controlador. JwtService, CustomUserDetailsService y
++ *       AuthorizationService también se simulan: son dependencias de la seguridad y así el contexto arranca sin el resto de la aplicación.</li>
++ *   <li>{@code jsonPath("$.campo")}: lee un campo del JSON de respuesta. {@code verify(servicio, never())} demuestra que el
++ *       controlador rechazó la petición ANTES de llegar al servicio.</li>
++ * </ul>
++ *
++ * El registro (POST /api/users) es público y pasa por AuthService; las consultas por email y username exigen estar autenticado
++ * ({@code @WithMockUser}). La regla fina "solo el propio usuario o ADMIN" es un @PreAuthorize del servicio, que aquí está simulado.
++ */
+ @WebMvcTest(UserController.class)
+ @Import({GlobalExceptionHandler.class, SecurityConfig.class, SecurityErrorWriter.class,
+         RestAuthenticationEntryPoint.class, RestAccessDeniedHandler.class})
+@@ -60,6 +79,7 @@ class UserControllerTest {
+     @MockitoBean
+     private AuthorizationService authorizationService;
+ 
++    // Cuerpo JSON de registro válido; las pruebas de error lo modifican con replace(...).
+     private static final String VALID_BODY = """
+             {
+               "username": "andrea",
+@@ -73,6 +93,7 @@ class UserControllerTest {
+             }
+             """;
+ 
++    // Usuario de ejemplo que devuelve el servicio simulado.
+     private UserResponse andrea() {
+         return new UserResponse(
+                 1L,
+@@ -88,6 +109,7 @@ class UserControllerTest {
+     }
+ 
+     // TEST-CTRL-USR-001 / AC-CTRL007: registro válido -> 201
++    // Registro válido: 201 Created con los datos del usuario, y se llamó a authService.register.
+     @Test
+     void shouldRegisterUser() throws Exception {
+         when(authService.register(any(RegisterUserRequest.class))).thenReturn(andrea());
+@@ -106,6 +128,7 @@ class UserControllerTest {
+     }
+ 
+     // phone y city son opcionales: sin ellos también es válido
++    // Teléfono y ciudad son opcionales: sin ellos el registro sigue siendo válido (201).
+     @Test
+     void shouldRegisterUserWithoutOptionalFields() throws Exception {
+         when(authService.register(any(RegisterUserRequest.class))).thenReturn(andrea());
+@@ -128,6 +151,7 @@ class UserControllerTest {
+     }
+ 
+     // TEST-CTRL-USR-002: email inválido -> 400, Service nunca invocado
++    // Email con formato inválido: 400 "Validation failed" y details.email con el motivo. El servicio nunca se invoca.
+     @Test
+     void shouldReturn400WhenEmailIsInvalid() throws Exception {
+         mockMvc.perform(post("/api/users")
+@@ -143,6 +167,7 @@ class UserControllerTest {
+     }
+ 
+     // Extra: body vacío -> todos los obligatorios en details
++    // Cuerpo vacío: 400 y details trae un mensaje por cada campo obligatorio faltante.
+     @Test
+     void shouldReturn400WhenRequiredFieldsAreMissing() throws Exception {
+         mockMvc.perform(post("/api/users")
+@@ -159,6 +184,7 @@ class UserControllerTest {
+     }
+ 
+     // Extra: JSON mal formado -> 400
++    // JSON roto: 400 con el mensaje genérico "Malformed or invalid JSON request".
+     @Test
+     void shouldReturn400WhenJsonIsMalformed() throws Exception {
+         mockMvc.perform(post("/api/users")
+@@ -171,6 +197,8 @@ class UserControllerTest {
+     }
+ 
+     // TEST-CTRL-USR-003 / AC-CTRL008: username duplicado -> 409 sin detalles internos
++    // Username repetido (BR-USER-001): el servicio lanza DuplicateResourceException -> 409. Comprueba que el cuerpo no contiene
++    // la palabra "Exception" (no se filtran nombres de clases internas).
+     @Test
+     void shouldReturn409WhenUsernameAlreadyExists() throws Exception {
+         when(authService.register(any(RegisterUserRequest.class)))
+@@ -188,6 +216,7 @@ class UserControllerTest {
+     }
+ 
+     // Extra: email duplicado -> 409
++    // Email repetido (BR-USER-002): 409 con el mensaje de la excepción.
+     @Test
+     void shouldReturn409WhenEmailAlreadyExists() throws Exception {
+         when(authService.register(any(RegisterUserRequest.class)))
+@@ -201,6 +230,7 @@ class UserControllerTest {
+     }
+ 
+     // Extra: fecha de nacimiento futura la rechaza el Service (regla de negocio) -> 409
++    // Fecha de nacimiento futura: es una regla de negocio del servicio (BR-USER-005), no del controlador -> 409.
+     @Test
+     void shouldReturn409WhenBirthDateIsInTheFuture() throws Exception {
+         when(authService.register(any(RegisterUserRequest.class)))
+@@ -215,6 +245,7 @@ class UserControllerTest {
+     }
+ 
+     // TEST-CTRL-USR-004: consultar por email -> 200
++    // Consulta por email (usuario autenticado): 200 y se pasa el email al servicio.
+     @Test
+     @WithMockUser
+     void shouldReturnUserByEmail() throws Exception {
+@@ -228,6 +259,7 @@ class UserControllerTest {
+     }
+ 
+     // FR-CTRLUSR-002: email inexistente -> 404
++    // Email inexistente: 404 con el mensaje del servicio.
+     @Test
+     @WithMockUser
+     void shouldReturn404WhenEmailDoesNotExist() throws Exception {
+@@ -240,6 +272,7 @@ class UserControllerTest {
+     }
+ 
+     // Extra: falta ?email= -> 400 (no 500)
++    // Falta el parámetro ?email=: 400 (no 500) y details.email lo indica. El servicio nunca se invoca.
+     @Test
+     @WithMockUser
+     void shouldReturn400WhenEmailParamIsMissing() throws Exception {
+@@ -251,6 +284,7 @@ class UserControllerTest {
+     }
+ 
+     // TEST-CTRL-USR-005: consultar por username -> 200
++    // Consulta por username: 200 y se pasa el username al servicio.
+     @Test
+     @WithMockUser
+     void shouldReturnUserByUsername() throws Exception {
+@@ -264,6 +298,7 @@ class UserControllerTest {
+     }
+ 
+     // FR-CTRLUSR-003: username inexistente -> 404
++    // Username inexistente: 404.
+     @Test
+     @WithMockUser
+     void shouldReturn404WhenUsernameDoesNotExist() throws Exception {
+@@ -275,6 +310,7 @@ class UserControllerTest {
+     }
+ 
+     // Password demasiado corta (< 12) -> 400, AuthService nunca invocado
++    // Contraseña de menos de 12 caracteres: 400 con el mensaje de validación del campo password.
+     @Test
+     void shouldReturn400WhenPasswordIsTooShort() throws Exception {
+         mockMvc.perform(post("/api/users")
+@@ -289,6 +325,8 @@ class UserControllerTest {
+     }
+ 
+     // 40 caracteres "ñ" = 80 bytes: pasa @Size (caracteres) pero excede el límite de BCrypt -> 400
++    // La "ñ" ocupa 2 bytes en UTF-8: 40 caracteres son 80 bytes. Cumple el máximo de 72 CARACTERES (@Size) pero excede los
++    // 72 BYTES que BCrypt admite, y la validación @AssertTrue del request lo rechaza con 400.
+     @Test
+     void shouldReturn400WhenPasswordExceedsBcryptBytes() throws Exception {
+         String passwordOver72Bytes = "ñ".repeat(40);
+diff --git a/src/test/java/com/pulsepass/controller/VenueControllerTest.java b/src/test/java/com/pulsepass/controller/VenueControllerTest.java
+index f7e3ad9..2843663 100644
+--- a/src/test/java/com/pulsepass/controller/VenueControllerTest.java
++++ b/src/test/java/com/pulsepass/controller/VenueControllerTest.java
+@@ -32,6 +32,24 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
+ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+ 
++/**
++ * Prueba de la CAPA WEB (HTTP) del controlador, sin base de datos ni lógica de negocio real. Se envían peticiones HTTP simuladas
++ * con {@code MockMvc} y se comprueba la ruta, el código de respuesta, el JSON devuelto, las validaciones ({@code @Valid}) y cómo
++ * {@code GlobalExceptionHandler} traduce las excepciones.
++ *
++ * <ul>
++ *   <li>{@code @WebMvcTest}: levanta solo Spring MVC y seguridad, y únicamente el controlador indicado.</li>
++ *   <li>{@code @Import}: agrega lo que @WebMvcTest no carga solo: GlobalExceptionHandler, SecurityConfig y los manejadores de
++ *       errores 401/403.</li>
++ *   <li>{@code @MockitoBean}: reemplaza el servicio por un doble. {@code when(...).thenReturn(...)} o {@code thenThrow(...)} define
++ *       lo que "responde" el servicio, así solo se prueba el controlador. JwtService, CustomUserDetailsService y
++ *       AuthorizationService también se simulan: son dependencias de la seguridad y así el contexto arranca sin el resto de la aplicación.</li>
++ *   <li>{@code jsonPath("$.campo")}: lee un campo del JSON de respuesta. {@code verify(servicio, never())} demuestra que el
++ *       controlador rechazó la petición ANTES de llegar al servicio.</li>
++ * </ul>
++ *
++ * Las rutas de recintos son públicas: las pruebas se hacen sin usuario autenticado.
++ */
+ @WebMvcTest(VenueController.class)
+ @Import({GlobalExceptionHandler.class, SecurityConfig.class, SecurityErrorWriter.class,
+         RestAuthenticationEntryPoint.class, RestAccessDeniedHandler.class})
+@@ -51,6 +69,7 @@ class VenueControllerTest {
+     @MockitoBean
+     private AuthorizationService authorizationService;
+ 
++    // Recinto de ejemplo (capacidad 3) que devuelve el servicio simulado.
+     private VenueResponse venue() {
+         return new VenueResponse(
+                 1L,
+@@ -63,6 +82,7 @@ class VenueControllerTest {
+     }
+ 
+     // TEST-CTRL-VEN-001 / AC-CTRL001: venue existente -> 200
++    // Recinto existente: 200 y todos los campos del JSON (id, código, nombre, ciudad, capacidad y estado).
+     @Test
+     void shouldReturnVenueByCode() throws Exception {
+         when(venueService.findByCode("VEN-SMR-01")).thenReturn(venue());
+@@ -81,6 +101,7 @@ class VenueControllerTest {
+     }
+ 
+     // TEST-CTRL-VEN-002 / AC-CTRL002: venue inexistente -> 404 con ErrorResponse
++    // Recinto inexistente: 404 con el contrato completo de error (timestamp, status, error, message y details como mapa).
+     @Test
+     void shouldReturn404WhenVenueDoesNotExist() throws Exception {
+         when(venueService.findByCode("NO-EXISTE"))
+@@ -97,6 +118,7 @@ class VenueControllerTest {
+     }
+ 
+     // TEST-CTRL-VEN-003: venues activos -> 200
++    // Lista de activos (200). Verifica que "/active" no se confundió con la ruta /{code}.
+     @Test
+     void shouldReturnActiveVenues() throws Exception {
+         when(venueService.findActiveVenues()).thenReturn(List.of(venue()));
+@@ -113,6 +135,8 @@ class VenueControllerTest {
+     }
+ 
+     // Error inesperado -> 500 sin exponer detalles internos (NFR-CTRL-007)
++    // Un error inesperado (aquí un RuntimeException con un texto sensible) responde 500 con un mensaje genérico y
++    // NO filtra el detalle interno al cliente (NFR-CTRL-007). not(containsString(...)) comprueba que el texto no aparece.
+     @Test
+     void shouldReturn500WithoutLeakingInternalDetails() throws Exception {
+         when(venueService.findByCode("VEN-SMR-01"))
+-- 
+2.43.0
+

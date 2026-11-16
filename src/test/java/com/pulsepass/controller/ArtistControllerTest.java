@@ -30,6 +30,24 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+/**
+ * Prueba de la CAPA WEB (HTTP) del controlador, sin base de datos ni lógica de negocio real. Se envían peticiones HTTP simuladas
+ * con {@code MockMvc} y se comprueba la ruta, el código de respuesta, el JSON devuelto, las validaciones ({@code @Valid}) y cómo
+ * {@code GlobalExceptionHandler} traduce las excepciones.
+ *
+ * <ul>
+ *   <li>{@code @WebMvcTest}: levanta solo Spring MVC y seguridad, y únicamente el controlador indicado.</li>
+ *   <li>{@code @Import}: agrega lo que @WebMvcTest no carga solo: GlobalExceptionHandler, SecurityConfig y los manejadores de
+ *       errores 401/403.</li>
+ *   <li>{@code @MockitoBean}: reemplaza el servicio por un doble. {@code when(...).thenReturn(...)} o {@code thenThrow(...)} define
+ *       lo que "responde" el servicio, así solo se prueba el controlador. JwtService, CustomUserDetailsService y
+ *       AuthorizationService también se simulan: son dependencias de la seguridad y así el contexto arranca sin el resto de la aplicación.</li>
+ *   <li>{@code jsonPath("$.campo")}: lee un campo del JSON de respuesta. {@code verify(servicio, never())} demuestra que el
+ *       controlador rechazó la petición ANTES de llegar al servicio.</li>
+ * </ul>
+ *
+ * Las rutas de artistas son públicas: las pruebas se hacen sin usuario autenticado.
+ */
 @WebMvcTest(ArtistController.class)
 @Import({GlobalExceptionHandler.class, SecurityConfig.class, SecurityErrorWriter.class,
         RestAuthenticationEntryPoint.class, RestAccessDeniedHandler.class})
@@ -48,11 +66,13 @@ class ArtistControllerTest {
     @MockitoBean
     private AuthorizationService authorizationService;
 
+    // Artista de ejemplo que devuelve el servicio simulado.
     private ArtistResponse solarBeat() {
         return new ArtistResponse(1L, "Solar Beat", true);
     }
 
     // TEST-CTRL-ART-001: buscar por ID -> 200
+    // Respuesta 200 con JSON y los tres campos del artista. verify comprueba que el controlador llamó al servicio con id 1.
     @Test
     void shouldReturnArtistById() throws Exception {
         when(artistService.findById(1L)).thenReturn(solarBeat());
@@ -68,6 +88,7 @@ class ArtistControllerTest {
     }
 
     // TEST-CTRL-ART-002: ID inexistente -> 404
+    // El servicio lanza ResourceNotFoundException y GlobalExceptionHandler la convierte en 404 con el JSON estándar de error.
     @Test
     void shouldReturn404WhenArtistIdDoesNotExist() throws Exception {
         when(artistService.findById(99L))
@@ -81,6 +102,7 @@ class ArtistControllerTest {
     }
 
     // Extra: id no numérico -> 400, Service nunca invocado
+    // "abc" no se puede convertir a Long: 400 y details.id indica qué parámetro falló. El servicio nunca se invoca.
     @Test
     void shouldReturn400WhenArtistIdIsNotNumeric() throws Exception {
         mockMvc.perform(get("/api/artists/{id}", "abc"))
@@ -92,6 +114,7 @@ class ArtistControllerTest {
     }
 
     // TEST-CTRL-ART-003: buscar por stageName -> 200
+    // ?stageName= se pasa tal cual al servicio y se devuelve el artista (200).
     @Test
     void shouldReturnArtistByStageName() throws Exception {
         when(artistService.findByStageName("Solar Beat")).thenReturn(solarBeat());
@@ -104,6 +127,7 @@ class ArtistControllerTest {
     }
 
     // FR-CTRLART-002: stageName inexistente -> 404
+    // Nombre artístico inexistente: el servicio lanza la excepción y el cliente recibe 404.
     @Test
     void shouldReturn404WhenStageNameDoesNotExist() throws Exception {
         when(artistService.findByStageName("Nadie"))
@@ -115,6 +139,7 @@ class ArtistControllerTest {
     }
 
     // TEST-CTRL-ART-004: activos -> 200
+    // La lista de activos responde 200. Además verifica que "/active" NO se tomó como {id} (findById nunca se llama).
     @Test
     void shouldReturnActiveArtists() throws Exception {
         when(artistService.findActiveArtists()).thenReturn(List.of(solarBeat()));

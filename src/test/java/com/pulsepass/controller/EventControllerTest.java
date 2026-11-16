@@ -42,6 +42,25 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+/**
+ * Prueba de la CAPA WEB (HTTP) del controlador, sin base de datos ni lógica de negocio real. Se envían peticiones HTTP simuladas
+ * con {@code MockMvc} y se comprueba la ruta, el código de respuesta, el JSON devuelto, las validaciones ({@code @Valid}) y cómo
+ * {@code GlobalExceptionHandler} traduce las excepciones.
+ *
+ * <ul>
+ *   <li>{@code @WebMvcTest}: levanta solo Spring MVC y seguridad, y únicamente el controlador indicado.</li>
+ *   <li>{@code @Import}: agrega lo que @WebMvcTest no carga solo: GlobalExceptionHandler, SecurityConfig y los manejadores de
+ *       errores 401/403.</li>
+ *   <li>{@code @MockitoBean}: reemplaza el servicio por un doble. {@code when(...).thenReturn(...)} o {@code thenThrow(...)} define
+ *       lo que "responde" el servicio, así solo se prueba el controlador. JwtService, CustomUserDetailsService y
+ *       AuthorizationService también se simulan: son dependencias de la seguridad y así el contexto arranca sin el resto de la aplicación.</li>
+ *   <li>{@code jsonPath("$.campo")}: lee un campo del JSON de respuesta. {@code verify(servicio, never())} demuestra que el
+ *       controlador rechazó la petición ANTES de llegar al servicio.</li>
+ * </ul>
+ *
+ * Crear, publicar y asignar artistas exigen rol ADMIN ({@code @WithMockUser(roles = "ADMIN")}); las consultas son públicas
+ * y se prueban sin usuario. La visibilidad por rol (qué eventos ve cada quien) la decide el servicio, aquí simulado.
+ */
 @WebMvcTest(EventController.class)
 @Import({GlobalExceptionHandler.class, SecurityConfig.class, SecurityErrorWriter.class,
         RestAuthenticationEntryPoint.class, RestAccessDeniedHandler.class})
@@ -61,6 +80,7 @@ class EventControllerTest {
     @MockitoBean
     private AuthorizationService authorizationService;
 
+    // Cuerpo JSON de creación de evento válido; las pruebas de error lo modifican con replace(...).
     private static final String VALID_BODY = """
             {
               "eventCode": "CMF-2026",
@@ -73,6 +93,7 @@ class EventControllerTest {
             }
             """;
 
+    // Evento de ejemplo (detalle completo) con el estado y los artistas dados.
     private EventResponse event(EventStatus eventStatus, List<ArtistResponse> artists) {
         return new EventResponse(
                 1L,
@@ -89,6 +110,7 @@ class EventControllerTest {
         );
     }
 
+    // Evento de ejemplo en versión resumida, para los listados.
     private EventSummaryResponse summary() {
         return new EventSummaryResponse(
                 1L,
@@ -102,6 +124,7 @@ class EventControllerTest {
     }
 
     // TEST-CTRL-EVT-001 / AC-CTRL003: POST válido -> 201
+    // Como ADMIN, creación válida: 201 Created con el evento en estado DRAFT.
     @Test
     @WithMockUser(roles = "ADMIN")
     void shouldCreateEvent() throws Exception {
@@ -123,6 +146,7 @@ class EventControllerTest {
     }
 
     // TEST-CTRL-EVT-002 / AC-CTRL004: POST inválido -> 400 + details, Service nunca invocado
+    // Código y recinto vacíos: 400 con details por campo. El servicio nunca se invoca.
     @Test
     @WithMockUser(roles = "ADMIN")
     void shouldReturn400WhenEventRequestIsInvalid() throws Exception {
@@ -151,6 +175,7 @@ class EventControllerTest {
     }
 
     // Extra: campos obligatorios ausentes (category, eventDate, minimumAge)
+    // Faltan categoría, fecha y edad mínima: 400 con un mensaje por cada una.
     @Test
     @WithMockUser(roles = "ADMIN")
     void shouldReturn400WhenRequiredFieldsAreMissing() throws Exception {
@@ -172,6 +197,7 @@ class EventControllerTest {
     }
 
     // Extra: minimumAge negativo -> 400 (valor mínimo es validación estructural)
+    // Edad mínima -1: la validación @Min la rechaza en el controlador (validación de forma) con 400.
     @Test
     @WithMockUser(roles = "ADMIN")
     void shouldReturn400WhenMinimumAgeIsNegative() throws Exception {
@@ -186,6 +212,7 @@ class EventControllerTest {
     }
 
     // Extra: categoría fuera del enum -> 400 (JSON inválido)
+    // Categoría que no existe en el enum: JSON inválido, 400 y details.body presente.
     @Test
     @WithMockUser(roles = "ADMIN")
     void shouldReturn400WhenCategoryIsNotInEnum() throws Exception {
@@ -201,6 +228,7 @@ class EventControllerTest {
     }
 
     // Extra: JSON mal formado -> 400
+    // JSON roto: 400.
     @Test
     @WithMockUser(roles = "ADMIN")
     void shouldReturn400WhenJsonIsMalformed() throws Exception {
@@ -214,6 +242,7 @@ class EventControllerTest {
     }
 
     // Extra: eventCode duplicado (DuplicateResourceException) -> 409
+    // BR-EVENT-001: código repetido -> DuplicateResourceException -> 409.
     @Test
     @WithMockUser(roles = "ADMIN")
     void shouldReturn409WhenEventCodeAlreadyExists() throws Exception {
@@ -230,6 +259,7 @@ class EventControllerTest {
     }
 
     // Extra: venue inexistente al crear -> 404
+    // BR-EVENT-002: el recinto no existe -> 404.
     @Test
     @WithMockUser(roles = "ADMIN")
     void shouldReturn404WhenVenueDoesNotExistOnCreate() throws Exception {
@@ -244,6 +274,7 @@ class EventControllerTest {
     }
 
     // Extra: venue inactivo / fecha pasada (BusinessRuleException) -> 409
+    // BR-EVENT-003: recinto inactivo -> 409.
     @Test
     @WithMockUser(roles = "ADMIN")
     void shouldReturn409WhenVenueIsInactiveOnCreate() throws Exception {
@@ -258,6 +289,7 @@ class EventControllerTest {
     }
 
     // TEST-CTRL-EVT-003: GET existente -> 200
+    // Consulta pública por código: 200 con los datos, incluido el nombre del recinto aplanado (venueName).
     @Test
     void shouldReturnEventByCode() throws Exception {
         when(eventService.findByCode("CMF-2026"))
@@ -273,6 +305,7 @@ class EventControllerTest {
     }
 
     // TEST-CTRL-EVT-004: GET inexistente -> 404
+    // Evento inexistente: 404 con el contrato estándar de error.
     @Test
     void shouldReturn404WhenEventDoesNotExist() throws Exception {
         when(eventService.findByCode("CMF-2026"))
@@ -286,6 +319,7 @@ class EventControllerTest {
     }
 
     // TEST-CTRL-EVT-005: publicados -> 200
+    // Lista pública de publicados (200). Verifica que "/published" no se tomó como {eventCode}.
     @Test
     void shouldReturnPublishedEvents() throws Exception {
         when(eventService.findPublishedEvents()).thenReturn(List.of(summary()));
@@ -303,6 +337,7 @@ class EventControllerTest {
     }
 
     // TEST-CTRL-EVT-006 / AC-CTRL005: publicar válido -> 200
+    // Como ADMIN, PATCH publish: 200 y el evento sale PUBLISHED.
     @Test
     @WithMockUser(roles = "ADMIN")
     void shouldPublishEvent() throws Exception {
@@ -318,6 +353,7 @@ class EventControllerTest {
     }
 
     // TEST-CTRL-EVT-007 / AC-CTRL006: publicar inválido -> 409
+    // BR-EVENT-007: solo se publica un DRAFT -> 409.
     @Test
     @WithMockUser(roles = "ADMIN")
     void shouldReturn409WhenEventCannotBePublished() throws Exception {
@@ -335,6 +371,7 @@ class EventControllerTest {
     }
 
     // TEST-CTRL-EVT-008: asociar artista -> 200
+    // Como ADMIN, asignar un artista: 200 y el evento trae la lista de artistas con el nuevo.
     @Test
     @WithMockUser(roles = "ADMIN")
     void shouldAddArtistToEvent() throws Exception {
@@ -352,6 +389,7 @@ class EventControllerTest {
     }
 
     // Extra: artista ya asociado / evento CANCELLED o FINISHED -> 409
+    // BR-EVENT-010: artista ya asignado -> 409.
     @Test
     @WithMockUser(roles = "ADMIN")
     void shouldReturn409WhenArtistIsAlreadyAssigned() throws Exception {
@@ -367,6 +405,7 @@ class EventControllerTest {
     }
 
     // Extra: artista inexistente -> 404
+    // El artista no existe: 404.
     @Test
     @WithMockUser(roles = "ADMIN")
     void shouldReturn404WhenArtistDoesNotExist() throws Exception {
@@ -379,6 +418,7 @@ class EventControllerTest {
     }
 
     // Extra: artistId no numérico -> 400, Service nunca invocado
+    // artistId no numérico: 400 "Invalid request parameter" con details.artistId. El servicio nunca se invoca.
     @Test
     @WithMockUser(roles = "ADMIN")
     void shouldReturn400WhenArtistIdIsNotNumeric() throws Exception {
@@ -391,6 +431,7 @@ class EventControllerTest {
     }
 
     // TEST-CTRL-EVT-009: buscar por artista -> 200
+    // Búsqueda pública por nombre artístico: 200 con la lista resumida.
     @Test
     void shouldReturnEventsByArtist() throws Exception {
         when(eventService.findByArtist("Solar Beat")).thenReturn(List.of(summary()));
@@ -404,6 +445,7 @@ class EventControllerTest {
     }
 
     // Extra: falta el parámetro stageName -> 400 (no 500)
+    // Falta el parámetro obligatorio stageName: 400 "Missing required parameter" (no 500).
     @Test
     void shouldReturn400WhenStageNameParamIsMissing() throws Exception {
         mockMvc.perform(get("/api/events/by-artist"))

@@ -50,6 +50,7 @@ class RoutingErrorsControllerTest {
     @MockitoBean
     private AuthorizationService authorizationService;
 
+    // Usuario autenticado en una ruta que no existe: 404 con el contrato estándar de error (no una página de error ni un 500).
     @Test
     @WithMockUser(roles = "USER")
     void unknownRouteReturns404WithErrorResponse() throws Exception {
@@ -62,6 +63,7 @@ class RoutingErrorsControllerTest {
                 .andExpect(jsonPath("$.details").isMap());
     }
 
+    // Verbo no soportado (POST en una ruta solo GET): 405 con el JSON de error y la cabecera Allow que indica los permitidos.
     @Test
     @WithMockUser(roles = "USER")
     void unsupportedVerbReturns405WithAllowHeader() throws Exception {
@@ -74,6 +76,7 @@ class RoutingErrorsControllerTest {
                 .andExpect(jsonPath("$.details").isMap());
     }
 
+    // Content-Type text/plain en el login (se espera JSON): 415 Unsupported Media Type con el JSON estándar.
     @Test
     void wrongContentTypeOnLoginReturns415WithErrorResponse() throws Exception {
         mockMvc.perform(post("/api/auth/login")
@@ -84,6 +87,8 @@ class RoutingErrorsControllerTest {
                 .andExpect(jsonPath("$.error").value("Unsupported Media Type"));
     }
 
+    // Seguridad: un anónimo recibe 401 también en rutas inexistentes, así no puede distinguir qué rutas existen
+    // (por anyRequest().authenticated() de SecurityConfig).
     @Test
     void anonymousOnUnknownRouteStillGets401NotInfoAboutRoutes() throws Exception {
         // anyRequest().authenticated(): un anónimo no puede distinguir rutas existentes de inexistentes
