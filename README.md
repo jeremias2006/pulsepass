@@ -2,6 +2,8 @@
 
 Plataforma de eventos, artistas y entradas — caso de estudio académico de persistencia con **Java 21 / Spring Boot 4 / Spring Data JPA / PostgreSQL / Flyway / Testcontainers**.
 
+El repositorio incluye el **backend** (raíz) y, desde la Fase 5, el **frontend** web en [`frontend/`](#11-frontend-fase-5--react--typescript--tailwind) (React 19 + TypeScript + Vite + Tailwind 4).
+
 Este README responde a la sección 21 (Definition of Done) y sección 22 (Matriz de trazabilidad) del PRD.
 
 ## Integrantes
@@ -389,3 +391,98 @@ SPRING_PROFILES_ACTIVE=local ./mvnw spring-boot:run   # arranca con las cuentas 
 - CORS depende de `PULSEPASS_CORS_ORIGINS`; vacío significa ningún origen permitido.
 - Los usuarios legados (fases 1–3) no tienen credencial y no pueden iniciar sesión.
 - `application.properties` conserva las credenciales de la base de datos local de desarrollo (`postgres`/`postgres`); en cualquier otro entorno deben sobrescribirse con variables de entorno.
+
+---
+
+## 11. Frontend (Fase 5) — React + TypeScript + Tailwind
+
+Aplicación web en `frontend/` que consume la API REST de las secciones 9 y 10. Implementa las 20 páginas
+del PRD de frontend, con modo claro y oscuro, diseño responsive y control de acceso por rol.
+
+### 11.1 Stack
+
+| Área | Tecnología |
+|---|---|
+| Build y servidor de desarrollo | Vite 8 |
+| UI | React 19 + TypeScript (modo estricto) |
+| Estilos | Tailwind CSS 4 (tokens de marca en `@theme`, variantes `dark:`) |
+| Enrutado | `react-router` 8 (`createBrowserRouter`, rutas con carga perezosa) |
+| Datos del servidor | TanStack Query 5 |
+| Formularios y validación | React Hook Form + zod 4 (las respuestas de la API también se validan con zod) |
+| Pruebas | Vitest 5 + Testing Library + MSW 3 (la red se simula, no se usa el backend) |
+| Calidad | oxlint (lint) y Prettier (formato) |
+
+### 11.2 Cómo ejecutarlo
+
+Requisitos: Node.js 20 o superior y el backend corriendo en `http://localhost:8080` (secciones 4 y 10).
+
+```bash
+cd frontend
+cp .env.example .env     # opcional: VITE_API_BASE_URL=/api por defecto
+npm install
+npm run dev              # http://localhost:5173 (el proxy de Vite reenvía /api a :8080)
+```
+
+| Script | Qué hace |
+|---|---|
+| `npm run dev` | Servidor de desarrollo |
+| `npm test` | Pruebas (84) |
+| `npx tsc -b` | Revisión de tipos |
+| `npm run lint` | oxlint, 0 advertencias |
+| `npm run build` | Build de producción en `frontend/dist/` |
+| `npm run format` | Prettier |
+
+Si no se usa el proxy de Vite (URL absoluta en `VITE_API_BASE_URL`), el backend debe tener
+`PULSEPASS_CORS_ORIGINS` con el origen del frontend.
+
+**Cuentas de prueba:** `admin` (ADMIN) y `laura` (STAFF) las crea el backend con el perfil `local` (sección 10.1);
+un USER se registra desde `/registro` (contraseña de 12 o más caracteres).
+
+### 11.3 Datos de demostración
+
+El backend solo trae artistas semilla (migración V2), así que para ver el catálogo se cargan dos scripts opcionales,
+fuera de `db/migration` y pensados solo para una base local. Se copian al contenedor y se ejecutan con `psql`
+(no usar `Get-Content | docker exec` en PowerShell 5.1: convierte las tildes en `?`):
+
+```powershell
+docker cp frontend/docs/seed-demo.sql pulsepass-db:/tmp/seed-demo.sql
+docker cp frontend/docs/seed-eventos-extra.sql pulsepass-db:/tmp/seed-extra.sql
+docker exec -e PGCLIENTENCODING=UTF8 pulsepass-db psql -U postgres -d pulsepass -f /tmp/seed-demo.sql
+docker exec -e PGCLIENTENCODING=UTF8 pulsepass-db psql -U postgres -d pulsepass -f /tmp/seed-extra.sql
+```
+
+| Script | Contenido |
+|---|---|
+| `seed-demo.sql` | 2 sedes y 3 eventos (`CMF-2026`, `TECH-2027` y el borrador `DRAFT-001`) con artistas asociados |
+| `seed-eventos-extra.sql` | 5 sedes más y 6 eventos (todas las categorías, más un borrador). Se puede ejecutar varias veces sin duplicar |
+
+Las sedes son **reales** (Estadio Sierra Nevada, Movistar Arena, Teatro Metropolitano de Medellín, Teatro Municipal
+Enrique Buenaventura, Coliseo El Pueblo, Teatro Adolfo Mejía y Centro de Convenciones de Cartagena) con su aforo
+aproximado tomado de fuentes públicas; los eventos son ficticios. Para probar el estado «Agotado» se baja el aforo a mano,
+por ejemplo `UPDATE venues SET capacity = 3 WHERE code = 'VEN-SMR-01';`.
+
+### 11.4 Cambios y decisiones fuera del PRD
+
+Todo lo siguiente es **decisión propia del equipo**; el PRD de frontend no lo pide:
+
+| Cambio | Dónde | Por qué |
+|---|---|---|
+| **Lista «Tickets por validar»** con campo de filtro por código o titular y botón **Seleccionar** | `/staff/validacion` (STAFF y ADMIN) | El PRD §9.14 solo define la búsqueda por código de ticket. La lista permite encontrar un ticket sin tener el código a mano, usando el endpoint existente `GET /api/events/{code}/tickets/paid`, sin cambios en el backend. «Seleccionar» carga el ticket en la tarjeta de búsqueda, donde se confirma con «Marcar como usado»: hay un solo camino de validación y no se marca un ingreso por un clic accidental. |
+| **Botón «Copiar»** para el código de ticket y el de evento | Detalle y confirmación de ticket, validación de ingreso, tablas de tickets, detalle y gestión de evento, lista de eventos creados | Facilita pegar los códigos en la búsqueda, en «Tickets por validar» y en la gestión de eventos. Usa `navigator.clipboard` y, si no está disponible (p. ej. la app abierta por `http://IP` desde el celular), `execCommand('copy')`. |
+| **Atajo con el código del evento** y enlaces «Ver tickets pagados →» / «Gestionar evento →» | Detalle de evento, para STAFF y ADMIN (la gestión, solo ADMIN) | La API no lista borradores ni eventos agotados (GAP-01 del PRD) y la pantalla de gestión se abre con el código; el código se muestra a quien lo necesita. |
+| **Sedes y eventos de demostración reales** (`seed-demo.sql`, `seed-eventos-extra.sql`) | `frontend/docs/` | El backend no trae datos semilla de sedes ni eventos. |
+| **oxlint en lugar de ESLint** | `npm run lint` | El PRD menciona ESLint. Se mantiene oxlint porque es el que trae la plantilla actual de Vite 8, es mucho más rápido y pasa con 0 advertencias. El código no depende de él: migrar a ESLint es instalar `eslint`, `typescript-eslint` y `eslint-plugin-react-hooks` y cambiar el script `lint`. |
+| **El proxy de Vite quita la cabecera `Origin`** | `frontend/vite.config.ts` | Sin esto, las peticiones POST de desarrollo recibían 403 por CORS al pasar por el proxy. Solo afecta al servidor de desarrollo. |
+| **Imágenes de diseño extraídas del PDF** del PRD | `frontend/docs/diseno/` | No se tenía la carpeta `imagenes/` original; se usan las figuras del PDF, numeradas, como referencia visual. |
+
+### 11.5 Comportamientos y limitaciones conocidos
+
+- **Un evento agotado no vuelve a publicarse al cancelar tickets.** Al venderse el último cupo, el backend pasa el evento a
+  `SOLD_OUT` (BR-TICKET-008), pero `cancel` libera el cupo sin devolverlo a `PUBLISHED`; el catálogo público muestra solo `PUBLISHED`.
+  Corregirlo es un cambio de backend, fuera del alcance del frontend (PRD §26).
+- **No hay un listado de todos los eventos** (GAP-01): los campos «Código del evento» se escriben a mano. Un futuro
+  `GET /api/events` (STAFF/ADMIN) permitiría reemplazarlos por un selector y listar borradores y agotados.
+- **No existe «eliminar cuenta».** No hay endpoint ni pantalla, y `tickets.user_id` referencia a `users(id)` sin `ON DELETE`,
+  por lo que la base rechaza borrar un usuario con tickets; los tickets se conservan como historial.
+- Los guards de ruta del frontend son solo de experiencia de usuario; la autorización real la aplica el backend (sección 10.4).
+- El token vive en memoria y en `sessionStorage`; al vencer (15 min) la siguiente petición lleva a `/login` con el aviso de sesión expirada.
