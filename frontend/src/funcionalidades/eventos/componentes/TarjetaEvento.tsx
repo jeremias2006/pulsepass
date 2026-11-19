@@ -7,6 +7,19 @@ import { RUTAS } from '../../../lib/rutas'
 import { CATEGORIAS } from '../categorias'
 import type { EventoResumen } from '../tipos'
 
+/**
+ * Tarjeta de un evento en las listas (catálogo, inicio, eventos de un artista).
+ *
+ * <p>Vive en `funcionalidades/eventos/componentes/` y no en `componentes/` porque conoce el
+ * dominio: recibe un EventoResumen y sabe qué es una categoría y un estado. En `componentes/`
+ * solo van las piezas genéricas, que no saben nada del negocio.</p>
+ *
+ * <p>Toda la tarjeta es un <Link>, no un <div> con onClick: así funciona el teclado, se puede
+ * abrir en otra pestaña y los lectores de pantalla la anuncian como enlace.</p>
+ *
+ * <p>Recibe EventoResumen (el DTO corto), que no trae descripción ni artistas: la lista no los
+ * necesita y el backend no los envía.</p>
+ */
 export default function TarjetaEvento({ evento }: { evento: EventoResumen }) {
   const cat = CATEGORIAS[evento.category]
   return (

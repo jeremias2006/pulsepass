@@ -17,6 +17,19 @@ import type { Ticket } from '../funcionalidades/tickets/tipos'
 import { esNoDisponible, mensajeDeError } from '../lib/errores'
 import { RUTAS } from '../lib/rutas'
 
+/**
+ * Tickets pagados de un evento (ruta `/staff/eventos/:eventCode/tickets`). Caso de uso: ver el
+ * listado de asistentes esperados y validar desde ahí.
+ *
+ * <p><b>Acceso:</b> rol STAFF o ADMIN. <b>Consume:</b> GET /events/{code}/tickets/paid y
+ * PATCH /tickets/{code}/use.</p>
+ *
+ * <p>Solo lista los PAID: los cancelados no entran y los ya usados no vuelven a entrar. Es, en
+ * la práctica, la lista de control de la puerta.</p>
+ *
+ * <p>Usa `Tabla`, que en móvil convierte cada fila en una tarjeta: esta pantalla se usa de pie,
+ * en la entrada del recinto y casi siempre desde un teléfono.</p>
+ */
 export default function TicketsPagadosEvento() {
   const { eventCode } = useParams()
   const navigate = useNavigate()

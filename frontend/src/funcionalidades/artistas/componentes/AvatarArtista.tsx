@@ -2,6 +2,14 @@ import { Link } from 'react-router'
 import { RUTAS } from '../../../lib/rutas'
 import type { Artista } from '../tipos'
 
+/**
+ * Avatar de un artista a partir de sus iniciales.
+ *
+ * <p>Existe porque ArtistResponse no incluye ninguna imagen: el backend solo expone id,
+ * stageName y active. En lugar de dejar un hueco gris, se genera un avatar con las iniciales y
+ * un color estable por artista.</p>
+ */
+// Toma la primera letra de las dos primeras palabras: "Carlos Vives" → "CV".
 const iniciales = (nombre: string) =>
   nombre
     .split(/\s+/)
@@ -10,6 +18,10 @@ const iniciales = (nombre: string) =>
     .join('')
 
 // Colores pastel por artista (mapa completo, sin clases dinámicas); se elige con el id.
+// Las clases van escritas completas y no construidas al vuelo (`bg-${color}-100`) porque
+// Tailwind analiza el código fuente como texto: una clase armada en ejecución no existiría en
+// el CSS final. Es la misma razón por la que CATEGORIAS en eventos/categorias.tsx es un mapa.
+// Usar el id (y no un azar) hace que cada artista conserve siempre su color.
 const PASTELES = [
   'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-100',
   'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-100',

@@ -1,3 +1,9 @@
+/**
+ * Hooks de usuarios: el registro y la consulta del perfil propio.
+ *
+ * <p>`useRegistrarUsuario` no invalida nada porque crear una cuenta no deja obsoleta ninguna
+ * consulta en caché: todavía no hay sesión y nadie estaba mostrando ese usuario.</p>
+ */
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { obtenerUsuarioPorEmail, obtenerUsuarioPorUsername, registrarUsuario } from './api'
 

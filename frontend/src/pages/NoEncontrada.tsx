@@ -1,6 +1,16 @@
 import { Link } from 'react-router'
 import { RUTAS } from '../lib/rutas'
 
+/**
+ * Página 404. Cumple dos funciones:
+ *
+ * <ul>
+ *   <li>Como ruta `*` del router, captura cualquier URL que no corresponda a ninguna pantalla.
+ *       Va la última, porque el comodín coincide con todo.</li>
+ *   <li>Como componente normal, lo usan DetalleArtista y DetalleSede para mostrar el 404 de un
+ *       recurso concreto, pasándole su propio `mensaje`.</li>
+ * </ul>
+ */
 /** Ruta `*` y, con `mensaje`, el 404 de un recurso concreto (artista, sede…). */
 export default function NoEncontrada({
   mensaje = 'No encontramos esta página',

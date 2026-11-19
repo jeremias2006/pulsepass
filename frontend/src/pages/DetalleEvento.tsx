@@ -16,11 +16,27 @@ import { esNoDisponible } from '../lib/errores'
 import { formatearFecha } from '../lib/formato'
 import { RUTAS } from '../lib/rutas'
 
+/**
+ * Detalle de un evento (ruta `/eventos/:eventCode`). Caso de uso: ver toda la información y
+ * comprar la entrada. Es la pantalla central del flujo de compra.
+ *
+ * <p><b>Acceso:</b> pública a nivel de URL. El backend oculta los borradores: un evento en
+ * DRAFT responde 404 a quien no sea ADMIN, de modo que nadie puede descubrir su existencia
+ * probando códigos.<br>
+ * <b>Consume:</b> GET /events/{code} y GET /venues/{code}.</p>
+ *
+ * <p>La compra se delega en `PanelCompra`, que decide por su cuenta si mostrarse según el rol y
+ * el estado del evento.</p>
+ */
 export default function DetalleEvento() {
+    // useParams lee el trozo variable de la ruta: en /eventos/EVT-001, eventCode vale "EVT-001".
     const { eventCode } = useParams()
     const { tieneRol } = useAuth()
     const evento = useEvento(eventCode)
     // EventResponse solo trae código y nombre de la sede: ciudad y capacidad salen de GET /api/venues/{code}.
+    // Son dos consultas ENCADENADAS: esta depende del resultado de la anterior, y por eso recibe
+    // `evento.data?.venueCode`, que es undefined hasta que llega el evento. El `enabled` del hook
+    // la mantiene en espera mientras tanto.
     const sede = useSede(evento.data?.venueCode)
 
     if (evento.isPending) return <Cargando />

@@ -1,3 +1,10 @@
+/**
+ * Pie de página: aviso del proyecto y accesos secundarios a sedes y artistas.
+ *
+ * <p>Son enlaces públicos que no ocupan sitio en la barra principal, reservada a los caminos
+ * más usados. Se usa `<Link>` y no `<a>` para que la navegación ocurra dentro de la aplicación,
+ * sin recargar la página.</p>
+ */
 import { Link } from 'react-router'
 import { RUTAS } from '../lib/rutas'
 

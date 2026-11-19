@@ -9,6 +9,16 @@ import TarjetaTicket from '../funcionalidades/tickets/componentes/TarjetaTicket'
 import { useMisTickets } from '../funcionalidades/tickets/hooks'
 import { RUTAS } from '../lib/rutas'
 
+/**
+ * Mis tickets (ruta `/mis-tickets`). Caso de uso: consultar las entradas compradas y cancelar
+ * las que todavía se puedan.
+ *
+ * <p><b>Acceso:</b> rol USER. <b>Consume:</b> GET /tickets/by-user.</p>
+ *
+ * <p>Es la pantalla que se refresca sola tras una compra o una cancelación, porque los hooks
+ * de escritura invalidan la clave `['tickets','usuario',email]`.</p>
+ */
+// RESERVED no aparece entre los filtros porque el flujo actual no lo usa: una compra nace PAID.
 type Filtro = 'TODOS' | 'PAID' | 'USED' | 'CANCELLED'
 
 const OPCIONES: { valor: Filtro; etiqueta: string }[] = [
@@ -25,6 +35,9 @@ export default function MisTickets() {
   const q = useMisTickets(email)
   const [filtro, setFiltro] = useState<Filtro>('TODOS')
 
+  // El filtro se aplica aquí, sobre la lista ya descargada, y no con otra llamada al backend:
+  // no existe un endpoint que filtre por estado, y una persona tiene pocos tickets.
+  // `?? []` evita trabajar con undefined mientras la consulta está en curso.
   const visibles = (q.data ?? []).filter((t) => filtro === 'TODOS' || t.status === filtro)
 
   return (

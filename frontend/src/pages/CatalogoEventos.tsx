@@ -11,13 +11,31 @@ import TarjetaEvento from '../funcionalidades/eventos/componentes/TarjetaEvento'
 import { useEventosPorArtista, useEventosPublicados } from '../funcionalidades/eventos/hooks'
 import { EventCategorySchema } from '../funcionalidades/eventos/tipos'
 
+/**
+ * Catálogo de eventos (ruta `/eventos`). Caso de uso: explorar y filtrar la oferta.
+ *
+ * <p><b>Acceso:</b> pública.<br>
+ * <b>Consume:</b> GET /events/published, o GET /events/by-artist si hay filtro de artista, más
+ * GET /artists/active para poblar el desplegable.</p>
+ *
+ * <p>El filtro por artista se resuelve en el backend (es otro endpoint), mientras que el texto y
+ * la categoría se filtran aquí sobre la lista ya descargada: el backend no ofrece búsqueda y el
+ * catálogo es pequeño.</p>
+ */
 /** Filtros en la URL (?q=&categoria=&artista=): sobreviven a la recarga y se pueden compartir (FR-FE-EVT-002). */
 export default function CatalogoEventos() {
+  // Guardar los filtros en la URL y no en el estado del componente tiene tres ventajas: se
+  // conservan al recargar, el enlace se puede compartir tal cual, y el botón "atrás" deshace
+  // el último filtro en vez de salir de la página.
   const [params, setParams] = useSearchParams()
   const q = params.get('q') ?? ''
+  // La URL es un dato externo que cualquiera puede escribir: ?categoria=CUALQUIERCOSA. safeParse
+  // devuelve undefined si no es una categoría válida, y entonces simplemente no se filtra.
   const categoria = EventCategorySchema.safeParse(params.get('categoria')).data // valida el dato de la URL
   const artista = params.get('artista')
 
+  // Se declaran los dos hooks siempre (no se pueden llamar condicionalmente) y se elige cuál
+  // mirar. El que no corresponde queda inactivo por su `enabled`, así que no llama al backend.
   const publicados = useEventosPublicados()
   const porArtista = useEventosPorArtista(artista)
   const artistas = useArtistasActivos()

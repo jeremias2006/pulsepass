@@ -1,3 +1,10 @@
+/**
+ * Mensaje de aviso en cuatro tonos: éxito, error, información y advertencia.
+ *
+ * <p>Se usa para los resultados de las acciones: "Ticket cancelado", "No cumples la edad
+ * mínima", "Tu sesión expiró". El contenido es SIEMPRE texto, nunca HTML del servidor: así no
+ * hay forma de inyectar marcado a través de un mensaje de error.</p>
+ */
 import clsx from 'clsx'
 import { useEffect, useRef, type ReactNode } from 'react'
 
@@ -31,6 +38,9 @@ export default function Aviso({ tono, children, onCerrar, autoCerrarMs }: AvisoP
     return () => window.clearTimeout(id)
   }, [autoCerrarMs])
 
+  // role="alert" interrumpe al lector de pantalla para anunciar el mensaje de inmediato; se
+  // reserva a lo urgente. role="status" espera a que termine lo que esté leyendo. Usar "alert"
+  // para todo acabaría cansando a quien depende de él.
   const urgente = tono === 'error' || tono === 'advertencia'
   return (
     <div

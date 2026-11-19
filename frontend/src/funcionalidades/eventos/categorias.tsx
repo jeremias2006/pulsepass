@@ -1,3 +1,15 @@
+/**
+ * Identidad visual de cada categoría de evento: etiqueta en español, colores e icono.
+ *
+ * <p>Como la API no entrega imágenes de los eventos, la cabecera de cada tarjeta se resuelve con
+ * un panel de color y un icono según la categoría (DES-02). Esto da variedad visual al catálogo
+ * sin depender de recursos que el backend no tiene.</p>
+ *
+ * <p>Es un `Record<EventCategory, InfoCategoria>`, es decir, un mapa COMPLETO: si el backend
+ * añadiera una categoría, TypeScript marcaría el error aquí en vez de dejar una tarjeta sin
+ * color. Y las clases de Tailwind están escritas enteras, nunca compuestas en ejecución, porque
+ * Tailwind solo genera el CSS de las clases que encuentra literalmente en el código.</p>
+ */
 import type { ComponentProps, ComponentType } from 'react'
 import {
   IconoBalon,

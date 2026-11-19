@@ -18,6 +18,23 @@ import { esNoDisponible, mensajeDeError } from '../lib/errores'
 import { formatearFecha } from '../lib/formato'
 import { RUTAS } from '../lib/rutas'
 
+/**
+ * Gestión de un evento (ruta `/admin/eventos/:eventCode`). Caso de uso: completar un borrador y
+ * publicarlo. Es el segundo paso del alta de un evento.
+ *
+ * <p><b>Acceso:</b> rol ADMIN. <b>Consume:</b> GET /events/{code},
+ * POST /events/{code}/artists/{id} y PATCH /events/{code}/publish, más GET /artists/active para
+ * el desplegable.</p>
+ *
+ * <p>Publicar es la acción importante: hace visible el evento al público y por eso pide
+ * confirmación en un modal. El backend REVALIDA al publicar (BR-EVENT-007/008/009) que el
+ * evento siga en DRAFT, que la fecha siga siendo futura y que la sede siga activa, porque pudo
+ * pasar tiempo desde que se creó. De ahí que un evento creado hace semanas pueda fallar aquí.</p>
+ *
+ * <p>Tras publicar, el catálogo público se actualiza solo: `usePublicarEvento` invalida la
+ * clave `['eventos','publicados']`.</p>
+ */
+// Saluda con un aviso cuando se llega recién creado el evento, desde AdminCrearEvento.
 const recienCreado = (state: unknown): boolean =>
   typeof state === 'object' && state !== null && 'creado' in state && state.creado === true
 

@@ -1,3 +1,10 @@
+/**
+ * Hooks de artistas. Solo lecturas, con `staleTime` de 5 minutos por la misma razón que las
+ * sedes: son datos de catálogo que casi no cambian.
+ *
+ * <p>`useArtistaPorNombre` existe para la pantalla de detalle del artista, que necesita el
+ * nombre artístico para pedir después sus eventos con `useEventosPorArtista`.</p>
+ */
 import { useQuery } from '@tanstack/react-query'
 import { listarArtistasActivos, obtenerArtista, obtenerArtistaPorNombre } from './api'
 

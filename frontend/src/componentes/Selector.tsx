@@ -1,5 +1,12 @@
+/**
+ * Lista desplegable con etiqueta y error. Es el gemelo de `Campo` para los <select>, con el
+ * mismo tratamiento de accesibilidad (useId, aria-invalid, aria-describedby, role="alert").
+ *
+ * <p>Se usa, por ejemplo, para elegir la sede y la categoría al crear un evento.</p>
+ */
 import clsx from 'clsx'
 import { useId, type ComponentProps } from 'react'
+// Reutiliza el estilo de Campo para que ambos controles se vean iguales en el formulario.
 import { ESTILO_CONTROL } from './Campo'
 
 interface SelectorProps extends ComponentProps<'select'> {

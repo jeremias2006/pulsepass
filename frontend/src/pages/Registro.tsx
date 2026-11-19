@@ -12,6 +12,23 @@ import { RUTAS } from '../lib/rutas'
 import { useRegistrarUsuario } from '../funcionalidades/usuarios/hooks'
 import { RegistroSchema, type RegistroForm } from '../funcionalidades/usuarios/tipos'
 
+/**
+ * Registro de usuario (ruta `/registro`). Caso de uso: crear una cuenta para poder comprar.
+ *
+ * <p><b>Acceso:</b> solo sin sesión (dentro de `SoloAnonimo`).<br>
+ * <b>Consume:</b> POST /users, que es el endpoint de registro (lo atiende UserController, no
+ * AuthController).</p>
+ *
+ * <p>La cuenta se crea siempre con rol USER: el servidor lo fija en el código, así que desde
+ * aquí es imposible registrarse como STAFF o ADMIN. Esas cuentas solo las crea
+ * `LocalAccountsSeeder` al arrancar.</p>
+ *
+ * <p>Ejemplo de las tres validaciones del proyecto: Zod en el formulario (al instante), Bean
+ * Validation en el DTO del backend (400) y las reglas BR-USER en el Service (409, por ejemplo
+ * si el correo ya existe).</p>
+ */
+// Los campos del formulario, para repartir los errores que devuelve el backend en `details`:
+// los que coinciden con un campo se marcan sobre él; el resto se muestran como aviso general.
 const CAMPOS = ['username', 'email', 'firstName', 'lastName', 'birthDate', 'password'] as const
 
 export default function Registro() {

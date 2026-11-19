@@ -1,3 +1,10 @@
+/**
+ * Esquemas Zod de los usuarios: el perfil que devuelve el backend y el formulario de registro.
+ *
+ * <p>El backend aplana el perfil en la respuesta (los campos firstName, lastName, phone, city y
+ * birthDate viven en la entidad UserProfile, pero MapStruct los sube al mismo nivel con
+ * `@Mapping(source = "profile.firstName")`). Por eso aquí aparecen todos juntos.</p>
+ */
 import { z } from 'zod'
 import { hoyISO } from '../../lib/formato'
 
@@ -15,7 +22,14 @@ export const UsuarioSchema = z.object({
 })
 export type Usuario = z.infer<typeof UsuarioSchema>
 
-/** Validación ESTRUCTURAL (PRD §11). La edad mínima de un evento es regla del backend, no de la UI. */
+/**
+ * Validación ESTRUCTURAL (PRD §11). La edad mínima de un evento es regla del backend, no de la UI.
+ *
+ * <p>La distinción es la misma que en el backend entre Bean Validation y las reglas BR: aquí solo
+ * se comprueba la FORMA (obligatorio, longitud, formato de correo, fecha no futura). Si se
+ * copiara además la edad mínima, habría que replicar en el frontend una regla que depende del
+ * evento y que el backend evalúa en la fecha del evento, no en la de hoy.</p>
+ */
 export const RegistroSchema = z.object({
   username: z
     .string()

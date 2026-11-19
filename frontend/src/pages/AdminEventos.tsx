@@ -9,11 +9,27 @@ import Tarjeta from '../componentes/Tarjeta'
 import { leerEventosCreados } from '../funcionalidades/admin/eventosCreados'
 import { RUTAS } from '../lib/rutas'
 
+/**
+ * Administración de eventos (ruta `/admin/eventos`). Caso de uso: punto de entrada del ADMIN
+ * para crear un evento o abrir uno existente.
+ *
+ * <p><b>Acceso:</b> rol ADMIN. <b>Consume:</b> ningún endpoint, y ahí está lo llamativo.</p>
+ *
+ * <p>Esta pantalla hace visible la carencia GAP-01 del backend: no existe un endpoint que liste
+ * todos los eventos, solo `GET /events/published`, así que un ADMIN no tiene forma de encontrar
+ * sus borradores. Se resuelve a medias de dos maneras: recordando en sessionStorage los eventos
+ * creados en esta pestaña, y ofreciendo un campo para abrir cualquiera por su código.</p>
+ *
+ * <p>La solución de fondo es del backend: añadir `GET /api/events` restringido a STAFF y ADMIN.
+ * Es la mejora pendiente más clara del proyecto.</p>
+ */
 export default function AdminEventos() {
   const navigate = useNavigate()
   const [codigo, setCodigo] = useState('')
   const [creados] = useState(leerEventosCreados) // GAP-01: solo los creados en esta pestaña
 
+  // No se valida aquí si el código existe: se navega y que la pantalla de gestión lo averigüe
+  // con su GET. Así hay una sola llamada en lugar de dos, y un solo sitio que trata el 404.
   const abrir = (e: FormEvent) => {
     e.preventDefault()
     const c = codigo.trim()

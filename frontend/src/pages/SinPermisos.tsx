@@ -1,6 +1,14 @@
 import { Link } from 'react-router'
 import { RUTAS } from '../lib/rutas'
 
+/**
+ * Página 403 (ruta `/403`). Es el destino de `RutaPorRol` cuando hay sesión pero falta el rol.
+ *
+ * <p>Se distingue del 404 a propósito, igual que en el backend: 401 es "no sé quién eres" y
+ * lleva al login; 403 es "sé quién eres, pero no puedes" y lleva aquí. Mandar al login a quien
+ * ya tiene sesión no serviría de nada, porque volver a entrar con la misma cuenta no cambiaría
+ * sus permisos.</p>
+ */
 export default function SinPermisos() {
   return (
     <section className="py-16 text-center">

@@ -1,3 +1,7 @@
+/**
+ * Llamadas al backend para las sedes. Ambas son públicas (permitAll en SecurityConfig): el
+ * catálogo de sedes es información de consulta, no hay escrituras desde el frontend.
+ */
 import { z } from 'zod'
 import { http } from '../../lib/http'
 import { SedeSchema } from './tipos'

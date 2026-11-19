@@ -1,3 +1,14 @@
+/**
+ * Tabla genérica y adaptable. La usan la lista de tickets pagados de un evento y la de
+ * validación de ingreso.
+ *
+ * <p>Es genérica en `T`: no sabe qué contienen las filas. Quien la usa le pasa las columnas, y
+ * cada columna dice cómo pintar su celda a partir de una fila. Por eso vive en `componentes/` y
+ * no en una funcionalidad.</p>
+ *
+ * <p>`clave` devuelve el identificador único de cada fila, que React necesita para saber qué
+ * cambió entre dos pintados (aquí se pasa el código del ticket, nunca el índice del arreglo).</p>
+ */
 import type { ReactNode } from 'react'
 
 export interface Columna<T> {
@@ -11,7 +22,18 @@ interface TablaProps<T> {
   clave: (fila: T) => string | number
 }
 
-/** md+: tabla normal. Móvil: cada fila se vuelve una tarjeta "Encabezado: valor" (PRD §9.15). */
+/**
+ * md+: tabla normal. Móvil: cada fila se vuelve una tarjeta "Encabezado: valor" (PRD §9.15).
+ *
+ * <p>En una pantalla estrecha una tabla de varias columnas obliga a desplazarse en horizontal.
+ * La solución es cambiar la presentación sin cambiar el marcado: en móvil los `display` pasan a
+ * `block`, los encabezados se ocultan visualmente (pero siguen ahí para los lectores de
+ * pantalla, con `sr-only`) y cada celda muestra su propio título mediante
+ * `before:content-[attr(data-etiqueta)]`, que toma el texto del atributo `data-etiqueta`.</p>
+ *
+ * <p>Así el HTML sigue siendo una tabla de verdad, con `<th scope="col">`, que es lo que
+ * necesitan los lectores de pantalla para anunciar bien los datos.</p>
+ */
 export default function Tabla<T>({ columnas, filas, clave }: TablaProps<T>) {
   return (
     <table className="block w-full text-left text-sm md:table">

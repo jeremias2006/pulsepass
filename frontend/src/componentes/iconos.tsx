@@ -1,5 +1,13 @@
-import type { ComponentProps } from 'react'
-
+/**
+ * Juego de iconos propio, en SVG.
+ *
+ * <p>Se dibujan a mano en lugar de instalar una librería de iconos: son pocos y así no se añade
+ * una dependencia ni peso al paquete final. Todos comparten el componente `Base`, que fija el
+ * tamaño, el grosor de trazo y los remates.</p>
+ *
+ * <p>`stroke="currentColor"` hace que cada icono tome el color del texto que lo rodea, de modo
+ * que funciona igual en modo claro y oscuro sin definir colores por icono.</p>
+ */
 /** SVG de trazo, decorativos (aria-hidden). Añade el resto del set según docs/diseno/Sistema.png. */
 function Base(props: ComponentProps<'svg'>) {
   return (

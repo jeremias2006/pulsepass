@@ -2,7 +2,17 @@ import { Link, isRouteErrorResponse, useNavigate, useRouteError } from 'react-ro
 import Boton from '../componentes/Boton'
 import { RUTAS } from '../lib/rutas'
 
-/** ErrorBoundary de la ruta raíz. Mensaje seguro: nunca stack trace ni detalles internos. */
+/**
+ * ErrorBoundary de la ruta raíz. Mensaje seguro: nunca stack trace ni detalles internos.
+ *
+ * <p>Es la red de seguridad del frontend: si un componente lanza una excepción no prevista, en
+ * lugar de dejar la pantalla en blanco se muestra esto. Cumple el papel que `GlobalExceptionHandler`
+ * cumple en el backend, y con el mismo criterio: al usuario, un mensaje genérico; el detalle se
+ * queda en la consola del navegador.</p>
+ *
+ * <p>Mostrar la traza del error revelaría nombres de componentes y rutas internas, que es
+ * información útil para quien busque vulnerabilidades.</p>
+ */
 export default function ErrorPagina() {
   const error = useRouteError()
   const navigate = useNavigate()

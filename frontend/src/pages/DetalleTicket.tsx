@@ -14,6 +14,17 @@ import { esNoDisponible } from '../lib/errores'
 import { formatearFechaHora } from '../lib/formato'
 import { RUTAS } from '../lib/rutas'
 
+/**
+ * Detalle de un ticket (ruta `/mis-tickets/:ticketCode`). Caso de uso: ver una entrada completa
+ * y, si procede, cancelarla.
+ *
+ * <p><b>Acceso:</b> rol USER, y además el backend comprueba la propiedad con
+ * `@PreAuthorize(... isTicketOwner ...)`.<br>
+ * <b>Consume:</b> GET /tickets/{code}.</p>
+ *
+ * <p>Muestra el código en fuente monoespaciada y con botón de copiar, porque es el dato que se
+ * presenta en la puerta del evento.</p>
+ */
 export default function DetalleTicket() {
   const { ticketCode } = useParams()
   const q = useTicket(ticketCode)
@@ -21,6 +32,8 @@ export default function DetalleTicket() {
   if (q.isPending) return <Cargando />
   if (q.isError) {
     // 403 (ajeno) y 404 (inexistente) se ven igual: no se revela si el código existe.
+    // Es la contraparte de la política anti-enumeración del backend: si esta pantalla
+    // distinguiera los dos casos, delataría justo lo que allí se oculta. De ahí `esNoDisponible`.
     if (esNoDisponible(q.error))
       return (
         <EstadoVacio

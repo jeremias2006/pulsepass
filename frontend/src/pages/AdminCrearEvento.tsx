@@ -21,6 +21,19 @@ import { mananaISO } from '../lib/formato'
 import { ApiError } from '../lib/http'
 import { RUTAS } from '../lib/rutas'
 
+/**
+ * Crear evento (ruta `/admin/eventos/nuevo`). Caso de uso: dar de alta un evento nuevo.
+ *
+ * <p><b>Acceso:</b> rol ADMIN. <b>Consume:</b> POST /events, más GET /venues/active para poblar
+ * el desplegable de sedes.</p>
+ *
+ * <p>El evento nace en DRAFT, no publicado: es el primero de los dos pasos del alta. El
+ * administrador lo completa con calma (artistas, descripción) en la pantalla de gestión y lo
+ * publica cuando está listo. Hasta entonces no es visible para el público.</p>
+ *
+ * <p>Al crearlo se guarda en sessionStorage con `recordarEventoCreado`, por la carencia GAP-01
+ * explicada en AdminEventos.</p>
+ */
 const CAMPOS = [
   'eventCode',
   'name',
@@ -138,7 +151,9 @@ export default function AdminCrearEvento() {
             {...register('minimumAge', { valueAsNumber: true })}
           />
         </div>
-        {/* El backend solo guarda la FECHA (LocalDate) y exige que sea posterior a hoy. */}
+        {/* El backend solo guarda la FECHA (LocalDate) y exige que sea posterior a hoy.
+            Por eso `min` es MAÑANA y no hoy: el calendario no deja elegir una fecha que el
+            backend rechazaría con un 409 (BR-EVENT: isAfter(today), estrictamente posterior). */}
         <Campo
           etiqueta="Fecha"
           type="date"

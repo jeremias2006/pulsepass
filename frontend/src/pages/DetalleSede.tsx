@@ -9,6 +9,14 @@ import { ApiError } from '../lib/http'
 import { RUTAS } from '../lib/rutas'
 import NoEncontrada from './NoEncontrada'
 
+/**
+ * Detalle de una sede (ruta `/sedes/:code`). Caso de uso: ver ciudad y capacidad de un recinto.
+ *
+ * <p><b>Acceso:</b> pública. <b>Consume:</b> GET /venues/{code}.</p>
+ *
+ * <p>La capacidad que se muestra aquí es la misma que el backend usa para decidir si un evento
+ * se agota (BR-007/008).</p>
+ */
 export default function DetalleSede() {
   const { code } = useParams()
   const q = useSede(code)

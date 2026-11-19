@@ -4,6 +4,14 @@ import EstadoVacio from '../componentes/EstadoVacio'
 import AvatarArtista from '../funcionalidades/artistas/componentes/AvatarArtista'
 import { useArtistasActivos } from '../funcionalidades/artistas/hooks'
 
+/**
+ * Lista de artistas (ruta `/artistas`). Caso de uso: ver quién actúa en la plataforma.
+ *
+ * <p><b>Acceso:</b> pública. <b>Consume:</b> GET /artists/active.</p>
+ *
+ * <p>Es la pantalla más breve del proyecto y sirve de ejemplo del patrón que siguen todas: pedir
+ * con un hook y resolver los tres estados posibles (cargando, error, vacío) antes de pintar.</p>
+ */
 export default function ListaArtistas() {
   const q = useArtistasActivos()
   return (

@@ -1,8 +1,21 @@
+/**
+ * Botón único de la aplicación, con cuatro aspectos.
+ *
+ * <p>Tener un solo componente en vez de estilizar cada <button> garantiza que todos los botones
+ * del sitio se vean y se comporten igual, y que un cambio de color de marca se aplique en todas
+ * partes a la vez.</p>
+ *
+ * <p>`extends ComponentProps<'button'>` hace que acepte además cualquier atributo de un botón
+ * normal (onClick, disabled, aria-label, type...), que se reenvían con `{...resto}`.</p>
+ */
 import clsx from 'clsx'
 import type { ComponentProps } from 'react'
 
 type Variante = 'primario' | 'secundario' | 'peligro' | 'fantasma'
 
+// Clases comunes a todas las variantes. Dos detalles de accesibilidad:
+//   min-h-11      → 44 px de alto mínimo, el objetivo táctil recomendado para usar con el dedo.
+//   focus-visible → contorno visible al navegar con el teclado, pero no al hacer clic con ratón.
 const BASE =
   'inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-marca-600 disabled:cursor-not-allowed disabled:opacity-60'
 
@@ -31,7 +44,9 @@ export default function Boton({
   return (
     <button
       type={type}
+      // Mientras carga queda deshabilitado: evita el doble clic que duplicaría una compra.
       disabled={disabled || cargando}
+      // aria-busy avisa a los lectores de pantalla de que la acción está en curso.
       aria-busy={cargando || undefined}
       className={clsx(BASE, VARIANTES[variante], className)}
       {...resto}

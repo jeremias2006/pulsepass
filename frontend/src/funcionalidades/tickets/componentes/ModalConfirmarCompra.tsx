@@ -10,10 +10,20 @@ import { ETIQUETA_TIPO } from '../etiquetas'
 import { useComprarTicket } from '../hooks'
 import type { TicketType } from '../tipos'
 
+/**
+ * Último paso de la compra: resumen y confirmación.
+ *
+ * <p>Se separa de PanelCompra porque son dos responsabilidades distintas: aquel elige qué
+ * comprar, este ejecuta la compra y decide qué hacer con el resultado (navegar a la
+ * confirmación) y con el error (mostrarlo sin cerrar el modal, para poder reintentar).</p>
+ */
 interface Props {
   abierto: boolean
   evento: Evento
   tipo: TicketType
+  // El correo llega como prop desde la sesión y no se puede editar en ningún punto del flujo:
+  // es la defensa del frontend contra el IDOR. El backend lo verifica igualmente con
+  // isSelfByEmail, comparando los ids de usuario.
   emailSesion: string // SIEMPRE de la sesión, nunca de un campo editable (anti-IDOR)
   onCerrar: () => void
 }
@@ -28,6 +38,7 @@ export default function ModalConfirmarCompra({
   const navigate = useNavigate()
   const compra = useComprarTicket()
 
+  // El cuerpo lleva tres datos y ninguno es el precio: lo calcula el servidor.
   const confirmar = () =>
     compra.mutate(
       { userEmail: emailSesion, eventCode: evento.eventCode, type: tipo },

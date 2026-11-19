@@ -1,7 +1,20 @@
+/**
+ * Botón para copiar un código al portapapeles, con confirmación visual.
+ *
+ * <p>Pensado para los códigos de ticket y de evento, que son largos y fáciles de transcribir
+ * mal. Lo usan la tarjeta de ticket, la confirmación de compra y la pantalla de validación.</p>
+ */
 import { useEffect, useRef, useState } from 'react'
 import Boton from './Boton'
 
-/** Copia al portapapeles; si la API no existe (p. ej. http en el celular por IP) usa execCommand. */
+/**
+ * Copia al portapapeles; si la API no existe (p. ej. http en el celular por IP) usa execCommand.
+ *
+ * <p>`navigator.clipboard` solo está disponible en contextos seguros (HTTPS o localhost). Al
+ * probar desde un móvil contra la IP del equipo, la conexión es HTTP plano y no existe, así que
+ * se recurre al método antiguo: crear un <textarea> invisible, seleccionarlo y copiar. Devuelve
+ * un booleano en vez de lanzar, para que quien llame decida qué mostrar.</p>
+ */
 async function copiarTexto(valor: string): Promise<boolean> {
   try {
     if (navigator.clipboard) {
@@ -36,6 +49,8 @@ interface Props {
 export default function BotonCopiar({ valor, etiqueta }: Props) {
   const [estado, setEstado] = useState<'reposo' | 'copiado' | 'error'>('reposo')
   const temporizador = useRef<number | undefined>(undefined)
+  // Limpieza al desmontar: si el usuario cambia de pantalla justo después de copiar, el
+  // temporizador pendiente intentaría actualizar un componente que ya no existe.
   useEffect(() => () => window.clearTimeout(temporizador.current), [])
 
   const copiar = async () => {
@@ -52,6 +67,8 @@ export default function BotonCopiar({ valor, etiqueta }: Props) {
       aria-label={`Copiar ${etiqueta}`}
       onClick={() => void copiar()}
     >
+      {/* aria-live="polite" hace que el cambio de texto a "Copiado" se anuncie al lector de
+          pantalla: sin él, quien no ve el botón no sabría si la acción funcionó. */}
       <span aria-live="polite">
         {estado === 'copiado' ? 'Copiado' : estado === 'error' ? 'No se pudo copiar' : 'Copiar'}
       </span>

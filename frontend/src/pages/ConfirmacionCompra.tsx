@@ -13,6 +13,17 @@ import { useTicket } from '../funcionalidades/tickets/hooks'
 import { esNoDisponible } from '../lib/errores'
 import { RUTAS } from '../lib/rutas'
 
+/**
+ * Confirmación de compra (ruta `/compra/confirmacion/:ticketCode`). Caso de uso: cerrar el flujo
+ * de compra con un comprobante claro.
+ *
+ * <p><b>Acceso:</b> rol USER. <b>Consume:</b> GET /tickets/{code}.</p>
+ *
+ * <p>Es una pantalla con URL propia y no un simple aviso tras la compra: así el comprobante se
+ * puede volver a abrir, recargar o guardar en marcadores. El ticket suele estar ya en la caché,
+ * porque `useComprarTicket` lo sembró con `setQueryData` justo antes de navegar hasta aquí, de
+ * modo que aparece al instante sin otra llamada al backend.</p>
+ */
 export default function ConfirmacionCompra() {
   const { ticketCode } = useParams()
   const q = useTicket(ticketCode)

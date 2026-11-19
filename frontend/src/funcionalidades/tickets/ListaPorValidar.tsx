@@ -14,6 +14,12 @@ import { useTicketsPagadosPorEvento } from './hooks'
 import type { Ticket } from './tipos'
 
 /**
+ * Buscador de tickets por evento para la pantalla de validación.
+ *
+ * <p>Vive en `funcionalidades/tickets/` y no en `pages/` porque no es una pantalla: es un
+ * bloque que se inserta dentro de ValidacionIngreso.</p>
+ */
+/**
  * Mejora propia (no está en el PRD §9.14): lista los tickets PAID de un evento para
  * encontrar un ticket sin tener su código a mano. El botón «Seleccionar» de cada fila
  * lo carga en la tarjeta de búsqueda, donde se confirma con «Marcar como usado»

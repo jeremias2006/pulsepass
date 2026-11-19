@@ -9,6 +9,13 @@ import { ETIQUETA_TIPO } from '../etiquetas'
 import type { Ticket } from '../tipos'
 import CancelarTicket from './CancelarTicket'
 
+/**
+ * Tarjeta de un ticket en la pantalla "Mis tickets".
+ *
+ * <p>Muestra el resumen y deja a mano las dos acciones posibles: ver el detalle y cancelar. El
+ * botón de cancelar se delega en `CancelarTicket`, que decide por su cuenta si debe aparecer
+ * (solo tiene sentido con un ticket en estado PAID).</p>
+ */
 export default function TarjetaTicket({ ticket }: { ticket: Ticket }) {
   return (
     <Tarjeta className="space-y-2">

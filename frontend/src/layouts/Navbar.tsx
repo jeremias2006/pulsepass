@@ -1,3 +1,15 @@
+/**
+ * Barra de navegación superior. Cambia según quién haya iniciado sesión.
+ *
+ * <p>Los enlaces se calculan a partir de los roles: un USER ve "Mis tickets", un STAFF ve
+ * "Validar ingreso" y un ADMIN ve además "Administrar eventos". Es la misma información que usa
+ * `RutaPorRol`, pero aquí sirve para no ofrecer caminos que llevarían a un 403.</p>
+ *
+ * <p><b>Ocultar un enlace no protege nada.</b> Es cortesía: quien escriba la URL a mano verá la
+ * pantalla, y el backend le responderá 403 en cuanto pida datos.</p>
+ *
+ * <p>Incluye el menú plegable para móvil y el menú de usuario, ambos con manejo de teclado.</p>
+ */
 import clsx from 'clsx'
 import { useState, type KeyboardEvent } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router'
@@ -10,6 +22,8 @@ interface Enlace {
   texto: string
 }
 
+// NavLink pasa `isActive` a su className: así el enlace de la sección actual se resalta solo,
+// sin tener que comparar rutas a mano.
 const claseEnlace = ({ isActive }: { isActive: boolean }) =>
   clsx(
     'rounded-lg px-3 py-2 text-sm font-medium focus-visible:outline-2 focus-visible:outline-marca-600',
@@ -18,7 +32,13 @@ const claseEnlace = ({ isActive }: { isActive: boolean }) =>
       : 'text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800',
   )
 
-/** Tabla 8.4 del PRD: los enlaces salen de RUTAS y del rol (solo UX). */
+/**
+ * Tabla 8.4 del PRD: los enlaces salen de RUTAS y del rol (solo UX).
+ *
+ * <p>Los tres primeros son públicos; el resto se añaden según el rol. Obsérvese que un ADMIN
+ * ve también "Validar ingreso", porque `tieneRol('STAFF','ADMIN')` se cumple con cualquiera de
+ * los dos, igual que `hasAnyRole` en el backend.</p>
+ */
 function useEnlaces(): Enlace[] {
   const { tieneRol } = useAuth()
   const enlaces: Enlace[] = [

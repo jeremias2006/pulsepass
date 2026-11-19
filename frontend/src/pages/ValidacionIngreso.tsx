@@ -13,6 +13,25 @@ import ListaPorValidar from '../funcionalidades/tickets/ListaPorValidar'
 import { mensajeDeError } from '../lib/errores'
 import { ApiError } from '../lib/http'
 
+/**
+ * Validación de ingreso (ruta `/staff/validacion`). Caso de uso: el control de acceso en la
+ * puerta el día del evento.
+ *
+ * <p><b>Acceso:</b> rol STAFF o ADMIN. <b>Consume:</b> GET /tickets/{code} para buscar y
+ * PATCH /tickets/{code}/use para marcar la entrada.</p>
+ *
+ * <p>El flujo es en dos pasos a propósito: primero se busca y se muestra el ticket, y solo
+ * entonces se confirma con "Marcar como usado". Así quien atiende ve de quién es la entrada y
+ * en qué estado está antes de consumirla, y la acción (que es irreversible) nunca ocurre por un
+ * clic accidental.</p>
+ *
+ * <p>El backend revisa primero si está CANCELLED y después si está PAID (BR-013/014), lo que
+ * permite dar el mensaje exacto. Y como el estado pasa a USED, el mismo ticket no entra dos
+ * veces: es la medida antifraude de la puerta.</p>
+ *
+ * <p>Se apoya en `ListaPorValidar` para encontrar un ticket cuando no se tiene el código a mano.</p>
+ */
+// Mensajes específicos para los dos códigos que importan aquí; el resto cae en el genérico.
 function mensajeBusqueda(e: unknown): string {
     if (e instanceof ApiError && e.status === 404) return 'Ticket no encontrado'
     if (e instanceof ApiError && e.status === 403) return 'Sin permisos'
@@ -20,6 +39,8 @@ function mensajeBusqueda(e: unknown): string {
 }
 
 export default function ValidacionIngreso() {
+    // Dos estados y no uno: `texto` es lo que se está escribiendo y `codigo` lo ya confirmado.
+    // Si la búsqueda se disparara con cada tecla, habría una petición por carácter.
     const [texto, setTexto] = useState('')
     const [codigo, setCodigo] = useState<string | null>(null) // el código ya enviado a buscar
     const [vacio, setVacio] = useState(false)

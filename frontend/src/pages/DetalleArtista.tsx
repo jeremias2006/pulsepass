@@ -9,9 +9,21 @@ import { ApiError } from '../lib/http'
 import { RUTAS } from '../lib/rutas'
 import NoEncontrada from './NoEncontrada'
 
+/**
+ * Detalle de un artista (ruta `/artistas/:id`). Caso de uso: ver un artista y en qué eventos
+ * participa.
+ *
+ * <p><b>Acceso:</b> pública. <b>Consume:</b> GET /artists/{id} y, encadenado,
+ * GET /events/by-artist.</p>
+ *
+ * <p>Las dos consultas van en cadena porque el segundo endpoint busca por nombre artístico, no
+ * por id: hay que conocer primero el artista para poder pedir sus eventos.</p>
+ */
 export default function DetalleArtista() {
   const { id } = useParams()
   const n = Number(id)
+  // El id viene de la URL, así que puede ser cualquier cosa ("/artistas/abc"). Validarlo aquí
+  // evita una llamada al backend condenada a fallar y muestra el 404 al instante.
   const idValido = Number.isInteger(n) && n > 0 ? n : null // id no numérico → 404 de UI sin llamar a la API
   const artista = useArtista(idValido)
   const eventos = useEventosPorArtista(artista.data?.stageName ?? null) // el stageName sale de ArtistResponse

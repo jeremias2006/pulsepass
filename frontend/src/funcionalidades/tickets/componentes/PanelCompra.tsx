@@ -9,13 +9,27 @@ import { ETIQUETA_TIPO } from '../etiquetas'
 import { TicketTypeSchema, type TicketType } from '../tipos'
 import ModalConfirmarCompra from './ModalConfirmarCompra'
 
+/**
+ * Panel de compra de la pantalla de detalle del evento: elegir el tipo de entrada y confirmar.
+ *
+ * <p>Nada de lo que decide este componente es seguridad. Ocultar el panel a quien no es USER o
+ * deshabilitar el botón en un evento agotado solo evita un viaje inútil y un mensaje de error.
+ * Quien de verdad impide la compra es el backend, con `hasRole("USER")` en SecurityConfig y las
+ * siete reglas BR-001 a BR-007 de TicketService.</p>
+ *
+ * <p>Tres situaciones, tres comportamientos: anónimo ve un enlace al login (que luego lo
+ * devuelve aquí), USER ve el botón de compra, y STAFF o ADMIN no ven el panel.</p>
+ */
 /** Solo UX: el backend decide (rol USER, estado, edad, cupo). STAFF/ADMIN no ven el panel (FR-SEC-TKT-01). */
 export default function PanelCompra({ evento }: { evento: Evento }) {
   const { sesion, tieneRol } = useAuth()
   const [tipo, setTipo] = useState<TicketType>('GENERAL')
   const [modal, setModal] = useState(false)
 
+  // Se comprueba el estado 'autenticado' antes del rol: a quien no ha entrado sí se le muestra
+  // el panel, con el enlace al login. Quien ya entró y no es USER no tiene nada que hacer aquí.
   if (sesion.estado === 'autenticado' && !tieneRol('USER')) return null
+  // Solo se vende lo que está PUBLISHED: ni DRAFT, ni SOLD_OUT, ni CANCELLED, ni FINISHED (BR-004).
   const vendible = evento.status === 'PUBLISHED'
 
   return (
@@ -57,6 +71,8 @@ export default function PanelCompra({ evento }: { evento: Evento }) {
             La compra no está disponible para este evento.
           </p>
         )}
+        {/* El precio no se muestra aquí porque el frontend no lo calcula: lo fija el servidor
+            (TicketPriceCalculator) a partir del tipo elegido. Se avisa para que no sorprenda. */}
         <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
           El precio lo define el sistema al confirmar.
         </p>

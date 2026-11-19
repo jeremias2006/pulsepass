@@ -7,7 +7,17 @@ interface FiltroChipsProps<V extends string> {
   etiquetaGrupo: string
 }
 
-/** DES-06: chips con aria-pressed (filtro de "Mis tickets"). */
+/**
+ * DES-06: chips con aria-pressed (filtro de "Mis tickets").
+ *
+ * <p>Grupo de botones donde solo uno está activo, como los filtros por estado de "Mis tickets" o
+ * por categoría en el catálogo. Es genérico en `V`, así que quien lo usa define sus propios
+ * valores y TypeScript comprueba que `valor` y `onCambiar` encajen con ellos.</p>
+ *
+ * <p>Son <button> con `aria-pressed` y no enlaces ni casillas: así el lector de pantalla
+ * anuncia cuál está seleccionado, algo que el color por sí solo no transmite. El
+ * `role="group"` con su etiqueta agrupa los chips para que se entienda de qué filtro son.</p>
+ */
 export default function FiltroChips<V extends string>({
   opciones,
   valor,

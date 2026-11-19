@@ -1,3 +1,16 @@
+/**
+ * Etiquetas de estado para eventos y tickets.
+ *
+ * <p>Es la excepción de esta carpeta: a diferencia del resto de `componentes/`, sí conoce el
+ * dominio, porque importa los enums EventStatus y TicketStatus. Está aquí, y no dentro de una
+ * funcionalidad, porque lo usan pantallas de las dos áreas y porque las dos variantes deben
+ * compartir exactamente la misma forma.</p>
+ *
+ * <p>Los mapas traducen el estado del backend a español y le asignan un color con significado:
+ * verde para lo correcto (publicado, pagado), ámbar para la advertencia (agotado), rojo para lo
+ * cancelado, gris para lo inactivo. El color nunca va solo: siempre hay texto, para quien no
+ * distingue colores.</p>
+ */
 import clsx from 'clsx'
 import type { EventStatus } from '../funcionalidades/eventos/tipos'
 import type { TicketStatus } from '../funcionalidades/tickets/tipos'
@@ -5,6 +18,9 @@ import type { TicketStatus } from '../funcionalidades/tickets/tipos'
 const BASE = 'inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold'
 
 // Colores de PRD §9.1 (mapas completos, sin clases dinámicas).
+// "Mapa completo" = Record<EventStatus, …>: si el backend añadiera un estado, TypeScript
+// señalaría este objeto como incompleto. "Sin clases dinámicas" = las clases están escritas
+// enteras, porque Tailwind solo genera el CSS de las que encuentra literalmente en el código.
 const ESTADO_EVENTO: Record<EventStatus, { etiqueta: string; clases: string }> = {
   DRAFT: {
     etiqueta: 'Borrador',

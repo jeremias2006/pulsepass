@@ -8,6 +8,14 @@ import Tarjeta from '../componentes/Tarjeta'
 import { useSedesActivas } from '../funcionalidades/sedes/hooks'
 import { RUTAS } from '../lib/rutas'
 
+/**
+ * Lista de sedes (ruta `/sedes`). Caso de uso: ver los recintos donde se celebran los eventos.
+ *
+ * <p><b>Acceso:</b> pública. <b>Consume:</b> GET /venues/active.</p>
+ *
+ * <p>Solo se listan las sedes activas: una sede inactiva no admite eventos nuevos (el backend lo
+ * revalida al publicar), así que mostrarla al público solo confundiría.</p>
+ */
 export default function ListaSedes() {
     const q = useSedesActivas()
     return (

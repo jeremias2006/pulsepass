@@ -11,6 +11,20 @@ import { CLAVE_AVISO, LoginSchema, type LoginForm } from '../funcionalidades/aut
 import { ApiError } from '../lib/http'
 import { desdeSeguro, RUTAS } from '../lib/rutas'
 
+/**
+ * Inicio de sesión (ruta `/login`). Caso de uso: identificarse para comprar o gestionar.
+ *
+ * <p><b>Acceso:</b> solo sin sesión (va dentro de `SoloAnonimo`).<br>
+ * <b>Consume:</b> POST /auth/login y, a continuación, GET /auth/me, ambos desde
+ * `AuthProvider.iniciarSesion`.</p>
+ *
+ * <p>El identificador admite correo o nombre de usuario: el backend decide por la presencia de
+ * "@". Ante cualquier fallo responde siempre el mismo 401 genérico, así que esta pantalla no
+ * puede (ni debe) distinguir entre "no existe" y "contraseña incorrecta".</p>
+ *
+ * <p>Tras entrar, devuelve al usuario a donde iba (`state.desde`), validado con `desdeSeguro`.</p>
+ */
+// Comprueba si se llega desde el registro, para saludar con un aviso en vez de en frío.
 const vieneDeRegistro = (state: unknown): boolean =>
   typeof state === 'object' && state !== null && 'registrado' in state && state.registrado === true
 
@@ -19,6 +33,10 @@ export default function Login() {
   const navigate = useNavigate()
   const location = useLocation()
   // El aviso "sesión expirada" lo deja AuthProvider en sessionStorage; se lee una vez y se borra.
+  // Se usa sessionStorage y no el estado de React porque entre el cierre de sesión y esta
+  // pantalla hay un cambio de ruta que destruye el componente anterior y su estado.
+  // Se lee en el inicializador de useState (una sola vez) y se borra de inmediato, para que no
+  // reaparezca la próxima vez que se visite el login.
   const [expirada] = useState(() => sessionStorage.getItem(CLAVE_AVISO) === 'expirada')
   useEffect(() => {
     sessionStorage.removeItem(CLAVE_AVISO)

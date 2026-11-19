@@ -9,9 +9,22 @@ import { useUsuarioPorEmail } from '../funcionalidades/usuarios/hooks'
 import { formatearFecha } from '../lib/formato'
 import { RUTAS } from '../lib/rutas'
 
+/**
+ * Mi cuenta (ruta `/cuenta`). Caso de uso: ver los datos propios y cerrar sesión.
+ *
+ * <p><b>Acceso:</b> cualquier sesión, sin importar el rol (dentro de `RutaProtegida`).<br>
+ * <b>Consume:</b> GET /users/by-email, donde `@PreAuthorize` solo deja consultar el perfil
+ * propio (o cualquiera si eres ADMIN).</p>
+ *
+ * <p>Los datos llegan de dos sitios: los básicos y los roles están ya en la sesión (vienen de
+ * /auth/me), y el perfil completo (nombre, teléfono, ciudad, fecha de nacimiento) se pide
+ * aparte, porque /auth/me no lo incluye.</p>
+ */
 export default function Cuenta() {
   const { sesion, cerrarSesion, tieneRol } = useAuth()
   const navigate = useNavigate()
+  // El correo sale SIEMPRE de la sesión, nunca de un campo ni de la URL: pedir el perfil de
+  // otra persona devolvería 403 de todos modos, pero conviene no construir siquiera la petición.
   const email = sesion.estado === 'autenticado' ? sesion.usuario.email : undefined
   const perfil = useUsuarioPorEmail(email) // solo se consulta la identidad propia
 

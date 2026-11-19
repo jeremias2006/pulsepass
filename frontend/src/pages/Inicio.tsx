@@ -9,7 +9,19 @@ import TarjetaEvento from '../funcionalidades/eventos/componentes/TarjetaEvento'
 import { useEventosPublicados } from '../funcionalidades/eventos/hooks'
 import { RUTAS } from '../lib/rutas'
 
+/**
+ * Pantalla de inicio (ruta `/`). Caso de uso: primera impresión y acceso rápido al catálogo.
+ *
+ * <p><b>Acceso:</b> pública.<br>
+ * <b>Consume:</b> GET /events/published y GET /artists/active, de los que muestra solo una
+ * muestra (3 eventos y 6 artistas) con `slice`.</p>
+ *
+ * <p>Usa la sesión para adaptar la llamada a la acción: a quien no ha entrado se le ofrece
+ * registrarse; a quien ya está dentro, explorar.</p>
+ */
 // Inicio es la única página (junto con el Layout) que NO se carga de forma perezosa (FE-012).
+// Al ser la primera que casi todo el mundo ve, incluirla en el paquete inicial evita una
+// descarga adicional justo al abrir el sitio. Las demás sí se cargan bajo demanda.
 export default function Inicio() {
   const { sesion } = useAuth()
   const eventos = useEventosPublicados()
